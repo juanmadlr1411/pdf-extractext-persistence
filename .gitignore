@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Entornos virtuales
+.venv/
+venv/
+
+# uv
+# uv.lock se versiona a propósito
+
+# Tests / cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Entorno
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
