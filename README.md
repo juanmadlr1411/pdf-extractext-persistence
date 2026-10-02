@@ -1,60 +1,55 @@
 # pdf-extractext-persistence
-Microservicio interno encargado de almacenar y recuperar documentos PDF (filename, texto, checksum). Centraliza el pool de conexiones a MongoDB y provee las operaciones CRUD para los servicios de API y Extracción.
 
-> Estado actual: bootstrap inicial. Solo expone `GET /health`; la lógica de persistencia se implementará en etapas posteriores.
+Microservicio interno encargado de almacenar y recuperar documentos PDF (`filename`, `extracted_text`, `checksum`). Centraliza el acceso a MongoDB para los servicios de API y Extracción.
+
+> Estado actual: **bootstrap inicial en Go**. Solo expone `GET /health`; el CRUD y el repositorio Mongo se implementarán en etapas posteriores.
 
 ## Requisitos
 
-- Python >= 3.12
-- [uv](https://docs.astral.sh/uv/)
+- Go >= 1.27
+- Docker (para ejecutar la imagen)
 
 ## Configuración
 
-Variables de entorno (prefijo `APP_`):
+Variables de entorno:
 
-| Variable | Descripción | Por defecto |
-|---|---|---|
-| `APP_NAME` | Nombre del servicio | `pdf-extractext-persistence` |
-| `APP_ENV` | Entorno (`local`, `dev`, `prod`...) | `local` |
-| `APP_HOST` | Host de escucha | `0.0.0.0` |
-| `APP_PORT` | Puerto de escucha | `8000` |
+| Variable    | Descripción                    | Por defecto                  |
+| ----------- | ------------------------------ | ---------------------------- |
+| `APP_NAME`  | Nombre del servicio            | `pdf-extractext-persistence` |
+| `APP_ENV`   | Entorno (`local`, `dev`...)    | `local`                      |
+| `APP_PORT`  | Puerto de escucha              | `8002`                       |
 
 ## Ejecutar en local
 
 ```bash
-uv sync
-uv run python -m pdf_extractext_persistence.main
+go run ./cmd/api
 ```
 
 Luego:
 
 ```bash
-curl http://localhost:8000/health
-# {"status":"ok","service":"pdf-extractext-persistence","environment":"local"}
+curl http://localhost:8002/health
+# {"environment":"local","service":"pdf-extractext-persistence","status":"ok"}
 ```
 
 ## Tests
 
 ```bash
-uv run pytest
+go test ./...
 ```
 
 ## Docker
 
 ```bash
 docker build -t pdf-extractext-persistence .
-docker run --rm -p 8000:8000 pdf-extractext-persistence
+docker run --rm -p 8002:8002 pdf-extractext-persistence
 ```
 
 ## Estructura
 
 ```
-src/pdf_extractext_persistence/
-├── config.py       # Settings vía variables de entorno
-├── app.py          # Factory de la app FastAPI
-├── main.py         # Entrypoint uvicorn
-└── api/
-    └── health.py   # GET /health
-tests/
-└── test_health.py  # Test unitario de /health
+cmd/api/            # Entrypoint (main): config + servidor HTTP con graceful shutdown
+internal/
+├── config/         # Configuración vía variables de entorno
+└── api/            # Router (chi) y handlers: GET /health
 ```

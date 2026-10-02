@@ -1,26 +1,14 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
+# Binarios
+/bin/
+*.exe
+*.out
+*.test
 
-# Entornos virtuales
-.venv/
-venv/
+# Cobertura
+coverage.*
 
-# uv
-# uv.lock se versiona a propósito
+# Vendored deps (si se llega a usar)
+/vendor/
 
-# Tests / cache
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Entorno
+# Entorno local
 .env
-.env.*
-
-# IDE
-.idea/
-.vscode/

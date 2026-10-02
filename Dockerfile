@@ -1,17 +1,25 @@
-FROM python:3.12-slim
+# syntax=docker/dockerfile:1
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# --- Stage 1: build ---
+FROM golang:1.27-alpine AS builder
 
-WORKDIR /app
+WORKDIR /src
 
-# Instalar dependencias primero para aprovechar la caché de capas
-COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-dev --no-install-project
+# Descargar dependencias primero para aprovechar la caché de capas
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Copiar el código fuente e instalar el proyecto
-COPY src/ ./src/
-RUN uv sync --frozen --no-dev
+# Compilar binario estático
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/api ./cmd/api
+
+# --- Stage 2: runtime mínimo ---
+FROM gcr.io/distroless/static-debian12:nonroot
+
+COPY --from=builder /app/api /app/api
 
 EXPOSE 8002
+USER nonroot
 
-CMD ["uv", "run", "--no-dev", "uvicorn", "pdf_extractext_persistence.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8002"]
+ENTRYPOINT ["/app/api"]
