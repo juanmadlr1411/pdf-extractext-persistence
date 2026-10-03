@@ -1,0 +1,10 @@
+services:
+  pdf-extractext-persistence:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - APP_ENV=local
+      - APP_PORT=8002

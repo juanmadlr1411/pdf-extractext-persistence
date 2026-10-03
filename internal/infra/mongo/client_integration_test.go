@@ -13,7 +13,7 @@ import (
 	"github.com/pdf-extractext/persistence/internal/infra/mongo"
 )
 
-// Requiere Docker: testcontainers levanta un contenedor mongo:7.0 por test.
+// Requiere Docker: testcontainers levanta un contenedor mongo:8 por test.
 
 const (
 	testDB         = "pdf_extractext_test"
@@ -25,7 +25,7 @@ func startMongo(t *testing.T) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	container, err := mongodb.Run(ctx, "mongo:7.0")
+	container, err := mongodb.Run(ctx, "mongo:8")
 	if err != nil {
 		t.Fatalf("no se pudo levantar el contenedor de MongoDB: %v", err)
 	}
