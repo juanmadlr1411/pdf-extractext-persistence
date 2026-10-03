@@ -9,7 +9,6 @@ import (
 	"github.com/pdf-extractext/persistence/internal/config"
 )
 
-// FASE RED: Este test fallará inicialmente (NewRouter aún no existe).
 func TestHealth_Returns200WithOKStatus(t *testing.T) {
 	cfg := config.Config{AppName: "pdf-extractext-persistence", Environment: "local"}
 

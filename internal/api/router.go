@@ -1,4 +1,4 @@
-// FASE GREEN: Implementación mínima para pasar el test.
+// Package api define el router HTTP y los handlers del servicio.
 package api
 
 import (
@@ -15,8 +15,7 @@ import (
 func NewRouter(cfg config.Config) http.Handler {
 	r := chi.NewRouter()
 
-	// FASE REFACTOR: handler extraído como closure sobre cfg (la ruta no
-	// captura estado global; se puede mover a un método los handlers crezcan).
+	// Handler como closure sobre cfg: no captura estado global.
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
