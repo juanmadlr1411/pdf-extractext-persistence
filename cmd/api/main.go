@@ -14,6 +14,7 @@ import (
 	"github.com/pdf-extractext/persistence/internal/api"
 	"github.com/pdf-extractext/persistence/internal/config"
 	"github.com/pdf-extractext/persistence/internal/infra/mongo"
+	"github.com/pdf-extractext/persistence/internal/service"
 )
 
 func main() {
@@ -39,9 +40,11 @@ func main() {
 	}
 	slog.Info("conexión a MongoDB establecida", "database", cfg.MongoDatabase, "collection", cfg.MongoCollection)
 
+	docService := service.NewDocumentService(mongo.NewDocumentRepository(db))
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.NewRouter(cfg),
+		Handler:           api.NewRouter(cfg, docService),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

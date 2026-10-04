@@ -8,12 +8,15 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/pdf-extractext/persistence/internal/config"
+	"github.com/pdf-extractext/persistence/internal/service"
 )
 
 // NewRouter construye el router del servicio con todos sus endpoints.
-// Es una función pura de Config para facilitar la inyección en tests.
-func NewRouter(cfg config.Config) http.Handler {
+// Recibe sus dependencias inyectadas para facilitar los tests.
+func NewRouter(cfg config.Config, docService *service.DocumentService) http.Handler {
 	r := chi.NewRouter()
+
+	r.Post("/documents", createDocumentHandler(docService))
 
 	// Handler como closure sobre cfg: no captura estado global.
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {

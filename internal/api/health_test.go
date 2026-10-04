@@ -15,7 +15,7 @@ func TestHealth_Returns200WithOKStatus(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 
-	NewRouter(cfg).ServeHTTP(rec, req)
+	NewRouter(cfg, nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("esperado 200, obtenido %d", rec.Code)
