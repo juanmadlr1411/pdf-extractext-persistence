@@ -1,4 +1,9 @@
 services:
+  mongo:
+    image: mongo:8
+    ports:
+      - "27017:27017"
+
   pdf-extractext-persistence:
     build:
       context: .
@@ -8,3 +13,6 @@ services:
     environment:
       - APP_ENV=local
       - APP_PORT=8002
+      - MONGO_URI=mongodb://mongo:27017
+    depends_on:
+      - mongo
