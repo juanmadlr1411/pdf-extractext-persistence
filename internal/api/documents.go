@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/pdf-extractext/persistence/internal/domain"
@@ -28,8 +29,15 @@ type documentResponse struct {
 func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req createDocumentRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "cuerpo de la petición inválido", http.StatusBadRequest)
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, "cuerpo de la petición inválido o malformado")
+			return
+		}
+
+		if req.Filename == "" || req.Checksum == "" {
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, "los campos filename y checksum son obligatorios")
 			return
 		}
 
@@ -39,7 +47,12 @@ func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 			Checksum:      req.Checksum,
 		})
 		if err != nil {
-			http.Error(w, "no se pudo persistir el documento", http.StatusInternalServerError)
+			if errors.Is(err, service.ErrFilenameTooLong) {
+				writeError(w, http.StatusUnprocessableEntity, codeFilenameTooLong,
+					"el filename supera la longitud máxima de 100 caracteres")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, codeInvalidRequest, "no se pudo persistir el documento")
 			return
 		}
 

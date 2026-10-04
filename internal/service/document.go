@@ -7,9 +7,16 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 
 	"github.com/pdf-extractext/persistence/internal/domain"
 )
+
+// MaxFilenameLength es la longitud máxima permitida para el nombre de archivo.
+const MaxFilenameLength = 100
+
+// ErrFilenameTooLong indica que el filename supera MaxFilenameLength.
+var ErrFilenameTooLong = errors.New("filename supera la longitud máxima permitida")
 
 // DocumentRepository es el puerto de persistencia de documentos.
 type DocumentRepository interface {
@@ -26,8 +33,11 @@ func NewDocumentService(repo DocumentRepository) *DocumentService {
 	return &DocumentService{repo: repo}
 }
 
-// Create genera el ID del documento y delega la persistencia al repositorio.
+// Create valida los invariantes, genera el ID y delega la persistencia.
 func (s *DocumentService) Create(ctx context.Context, doc domain.Document) (domain.Document, error) {
+	if len(doc.Filename) > MaxFilenameLength {
+		return domain.Document{}, ErrFilenameTooLong
+	}
 	doc.ID = newID()
 	return s.repo.Save(ctx, doc)
 }
