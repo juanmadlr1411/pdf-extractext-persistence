@@ -12,6 +12,7 @@ const (
 	codeFilenameTooLong = "FILENAME_TOO_LONG"
 	codeNotFound        = "NOT_FOUND"
 	codeInternalError   = "INTERNAL_ERROR"
+	codeDependencyUnavailable = "DEPENDENCY_UNAVAILABLE"
 )
 
 // errorResponse es el envelope de error del contrato: exactamente {code, message}.

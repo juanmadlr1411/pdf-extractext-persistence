@@ -51,6 +51,14 @@ func (c *Client) Connect(ctx context.Context) error {
 	return nil
 }
 
+// Check implementa service.HealthChecker: hace Ping a MongoDB.
+func (c *Client) Check(ctx context.Context) error {
+	if err := c.client.Ping(ctx, nil); err != nil {
+		return fmt.Errorf("MongoDB no responde al ping: %w", err)
+	}
+	return nil
+}
+
 // Disconnect cierra la conexión con MongoDB.
 func (c *Client) Disconnect(ctx context.Context) error {
 	if err := c.client.Disconnect(ctx); err != nil {

@@ -44,7 +44,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.NewRouter(cfg, docService),
+		Handler:           api.NewRouter(cfg, docService, db),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

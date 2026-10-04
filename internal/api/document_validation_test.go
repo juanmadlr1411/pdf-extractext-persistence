@@ -18,7 +18,7 @@ import (
 func TestCreateDocument_ContractRejections(t *testing.T) {
 	cfg := config.Config{AppName: "pdf-extractext-persistence", Environment: "local"}
 	svc := service.NewDocumentService(newFakeDocumentRepository())
-	router := NewRouter(cfg, svc)
+	router := NewRouter(cfg, svc, nil)
 
 	longFilename := strings.Repeat("a", 101) + ".pdf"
 

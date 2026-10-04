@@ -53,7 +53,7 @@ func (f *fakeDocumentRepository) FindByID(_ context.Context, id string) (domain.
 
 func newTestRouter(repo service.DocumentRepository) http.Handler {
 	cfg := config.Config{AppName: "pdf-extractext-persistence", Environment: "local"}
-	return NewRouter(cfg, service.NewDocumentService(repo))
+	return NewRouter(cfg, service.NewDocumentService(repo), nil)
 }
 
 func doRequest(t *testing.T, router http.Handler, method, path, body string) *httptest.ResponseRecorder {
