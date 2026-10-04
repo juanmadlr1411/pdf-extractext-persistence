@@ -12,18 +12,18 @@ import (
 	"github.com/pdf-extractext/persistence/internal/domain"
 )
 
-// MaxFilenameLength es la longitud máxima permitida para el nombre de archivo.
-const MaxFilenameLength = 100
-
-// ErrFilenameTooLong indica que el filename supera MaxFilenameLength.
-var ErrFilenameTooLong = errors.New("filename supera la longitud máxima permitida")
+// ErrDocumentNotFound es el error centinela que indica que un documento
+// no existe en el repositorio.
+var ErrDocumentNotFound = errors.New("documento no encontrado")
 
 // DocumentRepository es el puerto de persistencia de documentos.
 type DocumentRepository interface {
 	Save(ctx context.Context, doc domain.Document) (domain.Document, error)
+	FindAll(ctx context.Context) ([]domain.Document, error)
+	FindByID(ctx context.Context, id string) (domain.Document, error)
 }
 
-// DocumentService orquesta la creación de documentos.
+// DocumentService orquesta las operaciones sobre documentos.
 type DocumentService struct {
 	repo DocumentRepository
 }
@@ -33,13 +33,20 @@ func NewDocumentService(repo DocumentRepository) *DocumentService {
 	return &DocumentService{repo: repo}
 }
 
-// Create valida los invariantes, genera el ID y delega la persistencia.
+// Create genera el ID del documento y delega la persistencia al repositorio.
 func (s *DocumentService) Create(ctx context.Context, doc domain.Document) (domain.Document, error) {
-	if len(doc.Filename) > MaxFilenameLength {
-		return domain.Document{}, ErrFilenameTooLong
-	}
 	doc.ID = newID()
 	return s.repo.Save(ctx, doc)
+}
+
+// List devuelve la lista completa de documentos.
+func (s *DocumentService) List(ctx context.Context) ([]domain.Document, error) {
+	return s.repo.FindAll(ctx)
+}
+
+// GetByID devuelve el documento con el ID dado o ErrDocumentNotFound.
+func (s *DocumentService) GetByID(ctx context.Context, id string) (domain.Document, error) {
+	return s.repo.FindByID(ctx, id)
 }
 
 // newID genera un ID hexadecimal de 24 caracteres (12 bytes aleatorios).

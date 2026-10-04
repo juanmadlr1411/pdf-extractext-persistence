@@ -17,6 +17,8 @@ func NewRouter(cfg config.Config, docService *service.DocumentService) http.Hand
 	r := chi.NewRouter()
 
 	r.Post("/documents", createDocumentHandler(docService))
+	r.Get("/documents", listDocumentsHandler(docService))
+	r.Get("/documents/{id}", getDocumentByIDHandler(docService))
 
 	// Handler como closure sobre cfg: no captura estado global.
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {

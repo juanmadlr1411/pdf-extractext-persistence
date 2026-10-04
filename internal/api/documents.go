@@ -4,10 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/pdf-extractext/persistence/internal/domain"
 	"github.com/pdf-extractext/persistence/internal/service"
 )
+
+// objectIDRegex valida el formato de un ObjectId de Mongo (24 hex minúsculas).
+var objectIDRegex = regexp.MustCompile(`^[0-9a-f]{24}$`)
 
 // createDocumentRequest es el payload de entrada del endpoint POST /documents.
 // La deserialización es estricta: solo se aceptan estos campos.
@@ -25,19 +31,29 @@ type documentResponse struct {
 	Checksum      string `json:"checksum"`
 }
 
+// toResponse mapea la entidad de dominio al contrato de salida.
+func toResponse(doc domain.Document) documentResponse {
+	return documentResponse{
+		ID:            doc.ID,
+		Filename:      doc.Filename,
+		ExtractedText: doc.ExtractedText,
+		Checksum:      doc.Checksum,
+	}
+}
+
+// writeJSON serializa data con el status dado.
+func writeJSON(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
+}
+
 // createDocumentHandler maneja POST /documents.
 func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req createDocumentRequest
-		dec := json.NewDecoder(r.Body)
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, "cuerpo de la petición inválido o malformado")
-			return
-		}
-
-		if req.Filename == "" || req.Checksum == "" {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, "los campos filename y checksum son obligatorios")
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, "cuerpo de la petición inválido")
 			return
 		}
 
@@ -47,22 +63,54 @@ func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 			Checksum:      req.Checksum,
 		})
 		if err != nil {
-			if errors.Is(err, service.ErrFilenameTooLong) {
-				writeError(w, http.StatusUnprocessableEntity, codeFilenameTooLong,
-					"el filename supera la longitud máxima de 100 caracteres")
-				return
-			}
-			writeError(w, http.StatusInternalServerError, codeInvalidRequest, "no se pudo persistir el documento")
+			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudo persistir el documento")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(documentResponse{
-			ID:            doc.ID,
-			Filename:      doc.Filename,
-			ExtractedText: doc.ExtractedText,
-			Checksum:      doc.Checksum,
-		})
+		writeJSON(w, http.StatusCreated, toResponse(doc))
+	}
+}
+
+// listDocumentsHandler maneja GET /documents.
+// Devuelve la lista completa; sin paginación en la v1.
+func listDocumentsHandler(svc *service.DocumentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		docs, err := svc.List(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudieron listar los documentos")
+			return
+		}
+
+		// Contrato: lista vacía se serializa como [], nunca null.
+		resp := make([]documentResponse, 0, len(docs))
+		for _, doc := range docs {
+			resp = append(resp, toResponse(doc))
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+// getDocumentByIDHandler maneja GET /documents/{id}.
+// Valida el formato del ID de forma fail-fast antes de tocar el servicio.
+func getDocumentByIDHandler(svc *service.DocumentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+
+		if !objectIDRegex.MatchString(id) {
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, "el id debe ser un hexadecimal de 24 caracteres")
+			return
+		}
+
+		doc, err := svc.GetByID(r.Context(), id)
+		if errors.Is(err, service.ErrDocumentNotFound) {
+			writeError(w, http.StatusNotFound, codeNotFound, "documento no encontrado")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudo obtener el documento")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, toResponse(doc))
 	}
 }

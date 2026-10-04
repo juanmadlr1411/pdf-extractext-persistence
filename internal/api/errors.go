@@ -10,6 +10,8 @@ import (
 const (
 	codeInvalidRequest  = "INVALID_REQUEST"
 	codeFilenameTooLong = "FILENAME_TOO_LONG"
+	codeNotFound        = "NOT_FOUND"
+	codeInternalError   = "INTERNAL_ERROR"
 )
 
 // errorResponse es el envelope de error del contrato: exactamente {code, message}.
