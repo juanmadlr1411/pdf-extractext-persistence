@@ -85,6 +85,48 @@ func (r *DocumentRepository) FindByID(ctx context.Context, id string) (domain.Do
 	return documentFromBSON(raw), nil
 }
 
+// UpdateFilename renombra el documento y devuelve su estado actualizado,
+// o ErrDocumentNotFound si el ID no existe.
+func (r *DocumentRepository) UpdateFilename(ctx context.Context, id, filename string) (domain.Document, error) {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return domain.Document{}, service.ErrDocumentNotFound
+	}
+
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	var raw bson.M
+	err = r.client.Collection().FindOneAndUpdate(ctx,
+		bson.M{"_id": oid},
+		bson.M{"$set": bson.M{"filename": filename}},
+		opts,
+	).Decode(&raw)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return domain.Document{}, service.ErrDocumentNotFound
+	}
+	if err != nil {
+		return domain.Document{}, fmt.Errorf("no se pudo actualizar el documento: %w", err)
+	}
+	return documentFromBSON(raw), nil
+}
+
+// DeleteByID elimina el documento con el ID dado; si no existe devuelve
+// ErrDocumentNotFound (detectado via DeletedCount).
+func (r *DocumentRepository) DeleteByID(ctx context.Context, id string) error {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return service.ErrDocumentNotFound
+	}
+
+	res, err := r.client.Collection().DeleteOne(ctx, bson.M{"_id": oid})
+	if err != nil {
+		return fmt.Errorf("no se pudo eliminar el documento: %w", err)
+	}
+	if res.DeletedCount == 0 {
+		return service.ErrDocumentNotFound
+	}
+	return nil
+}
+
 // decodeDocument decodifica el documento actual del cursor al tipo de dominio.
 func decodeDocument(cursor *mongo.Cursor) (domain.Document, error) {
 	var raw bson.M

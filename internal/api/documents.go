@@ -23,6 +23,13 @@ type createDocumentRequest struct {
 	Checksum      string `json:"checksum"`
 }
 
+// updateFilenameRequest es el payload de PATCH /documents/{id}.
+// Puntero para distinguir campo ausente/vacío (400) de un valor válido.
+// Cualquier campo extra (checksum, extracted_text) se ignora y no muta.
+type updateFilenameRequest struct {
+	Filename *string `json:"filename"`
+}
+
 // documentResponse es el contrato de salida: exactamente estos 4 campos.
 type documentResponse struct {
 	ID            string `json:"id"`
@@ -108,6 +115,66 @@ func getDocumentByIDHandler(svc *service.DocumentService) http.HandlerFunc {
 		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudo obtener el documento")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, toResponse(doc))
+	}
+}
+
+// deleteDocumentHandler maneja DELETE /documents/{id}: 204 al eliminar,
+// 404 si ya no existe (idempotencia por ausencia).
+func deleteDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if !objectIDRegex.MatchString(id) {
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, "el id debe ser un hexadecimal de 24 caracteres")
+			return
+		}
+
+		if err := svc.Delete(r.Context(), id); errors.Is(err, service.ErrDocumentNotFound) {
+			writeError(w, http.StatusNotFound, codeNotFound, "documento no encontrado")
+			return
+		} else if err != nil {
+			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudo eliminar el documento")
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// patchDocumentHandler maneja PATCH /documents/{id}: solo filename es mutable.
+func patchDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if !objectIDRegex.MatchString(id) {
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, "el id debe ser un hexadecimal de 24 caracteres")
+			return
+		}
+
+		var req updateFilenameRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, "cuerpo de la petición inválido")
+			return
+		}
+		// Un rename sin filename es una petición sin intención válida.
+		if req.Filename == nil || *req.Filename == "" {
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, "se requiere el campo 'filename'")
+			return
+		}
+
+		doc, err := svc.UpdateFilename(r.Context(), id, *req.Filename)
+		if errors.Is(err, service.ErrFilenameTooLong) {
+			writeError(w, http.StatusUnprocessableEntity, codeFilenameTooLong, service.ErrFilenameTooLong.Error())
+			return
+		}
+		if errors.Is(err, service.ErrDocumentNotFound) {
+			writeError(w, http.StatusNotFound, codeNotFound, "documento no encontrado")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudo actualizar el documento")
 			return
 		}
 

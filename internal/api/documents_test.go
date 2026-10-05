@@ -18,10 +18,12 @@ import (
 // Guarda documentos indexados por ID y cuenta llamadas para verificar
 // que la capa API corta los errores antes de tocar persistencia.
 type fakeDocumentRepository struct {
-	docs      []domain.Document
-	byID      map[string]domain.Document
-	saveCalls int
-	findCalls int // cuenta FindAll + FindByID
+	docs        []domain.Document
+	byID        map[string]domain.Document
+	saveCalls   int
+	findCalls   int // cuenta FindAll + FindByID
+	updateCalls int
+	deleteCalls int
 }
 
 func newFakeDocumentRepository() *fakeDocumentRepository {
@@ -47,6 +49,37 @@ func (f *fakeDocumentRepository) FindByID(_ context.Context, id string) (domain.
 		return domain.Document{}, service.ErrDocumentNotFound
 	}
 	return doc, nil
+}
+
+func (f *fakeDocumentRepository) UpdateFilename(_ context.Context, id, filename string) (domain.Document, error) {
+	f.updateCalls++
+	doc, ok := f.byID[id]
+	if !ok {
+		return domain.Document{}, service.ErrDocumentNotFound
+	}
+	doc.Filename = filename
+	f.byID[id] = doc
+	for i := range f.docs {
+		if f.docs[i].ID == id {
+			f.docs[i].Filename = filename
+		}
+	}
+	return doc, nil
+}
+
+func (f *fakeDocumentRepository) DeleteByID(_ context.Context, id string) error {
+	f.deleteCalls++
+	if _, ok := f.byID[id]; !ok {
+		return service.ErrDocumentNotFound
+	}
+	delete(f.byID, id)
+	for i, d := range f.docs {
+		if d.ID == id {
+			f.docs = append(f.docs[:i], f.docs[i+1:]...)
+			break
+		}
+	}
+	return nil
 }
 
 // --- helpers ---
