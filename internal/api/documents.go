@@ -48,6 +48,17 @@ func toResponse(doc domain.Document) documentResponse {
 	}
 }
 
+// existingToResponse mapea el documento existente del error de checksum
+// duplicado (entidad PDFDocument de la issue #3) al contrato de salida.
+func existingToResponse(doc domain.PDFDocument) documentResponse {
+	return documentResponse{
+		ID:            doc.ID,
+		Filename:      doc.Filename,
+		ExtractedText: doc.ExtractedText,
+		Checksum:      doc.Checksum,
+	}
+}
+
 // writeJSON serializa data con el status dado.
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -70,7 +81,19 @@ func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 			Checksum:      req.Checksum,
 		})
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudo persistir el documento")
+			// Caso estrella del contrato (C2.3): checksum duplicado responde
+			// 409 con el envelope de error MÁS el documento existente completo.
+			var duplicate *domain.DuplicateChecksumError
+			if errors.As(err, &duplicate) {
+				status, code, message := translateError(err)
+				existing := existingToResponse(duplicate.Existing)
+				respondErrorWithDocument(w, code, message, status, &existing)
+				return
+			}
+			// Almacén caído -> 503 DEPENDENCY_UNAVAILABLE; fallo inesperado ->
+			// 500 INTERNAL_ERROR. La traducción es por catálogo.
+			status, code, message := translateError(err)
+			respondError(w, code, message, status)
 			return
 		}
 
