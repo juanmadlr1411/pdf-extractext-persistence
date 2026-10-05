@@ -15,6 +15,10 @@ import (
 func NewRouter(cfg config.Config, docService *service.DocumentService, healthChecker service.HealthChecker) http.Handler {
 	r := chi.NewRouter()
 
+	// Recuperación de pánico: cualquier caída responde INTERNAL_ERROR (500)
+	// con el envelope contractual, sin crashear la app.
+	r.Use(panicRecoveryMiddleware)
+
 	r.Post("/documents", createDocumentHandler(docService))
 	r.Get("/documents", listDocumentsHandler(docService))
 	r.Get("/documents/{id}", getDocumentByIDHandler(docService))

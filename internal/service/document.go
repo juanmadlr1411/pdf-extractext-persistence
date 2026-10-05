@@ -22,6 +22,10 @@ var ErrFilenameTooLong = errors.New("el filename supera el máximo de 100 caract
 // MaxFilenameLength es el invariante de longitud del filename.
 const MaxFilenameLength = 100
 
+// ErrDependencyUnavailable indica que una dependencia (p. ej. MongoDB)
+// no está disponible. Debe traducirse a 503 DEPENDENCY_UNAVAILABLE.
+var ErrDependencyUnavailable = errors.New("dependencia no disponible")
+
 // DocumentRepository es el puerto de persistencia de documentos.
 type DocumentRepository interface {
 	Save(ctx context.Context, doc domain.Document) (domain.Document, error)
