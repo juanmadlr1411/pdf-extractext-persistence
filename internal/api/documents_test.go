@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -20,6 +22,7 @@ import (
 type fakeDocumentRepository struct {
 	docs        []domain.Document
 	byID        map[string]domain.Document
+	saveErr     error // si no es nil, Save lo devuelve (simula fallos del almacén)
 	saveCalls   int
 	findCalls   int // cuenta FindAll + FindByID
 	updateCalls int
@@ -32,6 +35,9 @@ func newFakeDocumentRepository() *fakeDocumentRepository {
 
 func (f *fakeDocumentRepository) Save(_ context.Context, doc domain.Document) (domain.Document, error) {
 	f.saveCalls++
+	if f.saveErr != nil {
+		return domain.Document{}, f.saveErr
+	}
 	f.docs = append(f.docs, doc)
 	f.byID[doc.ID] = doc
 	return doc, nil
@@ -150,6 +156,122 @@ func TestCreateDocument_Returns201WithFourFields(t *testing.T) {
 	}
 	if body["checksum"] != "abc123" {
 		t.Errorf("checksum esperado %q, obtenido %v", "abc123", body["checksum"])
+	}
+}
+
+// --- Tests de la Issue #6: contrato de errores críticos del POST ---
+
+// Caso 1: checksum duplicado -> 409 DUPLICATE_CHECKSUM con el documento
+// existente completo en el envelope (estándar plano + document).
+func TestCreateDocument_DuplicateChecksum_Returns409WithExistingDocument(t *testing.T) {
+	existing := domain.PDFDocument{
+		ID:            "507f1f77bcf86cd799439011",
+		Filename:      "informe-original.pdf",
+		ExtractedText: "texto previamente extraído",
+		Checksum:      "sha256:abc123",
+	}
+	repo := newFakeDocumentRepository()
+	repo.saveErr = &domain.DuplicateChecksumError{Existing: existing}
+	router := newTestRouter(repo)
+
+	rec := doRequest(t, router, http.MethodPost, "/documents",
+		`{"filename":"informe.pdf","extracted_text":"texto extraído","checksum":"sha256:abc123"}`)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("esperado status 409, obtenido %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type esperado application/json, obtenido %q", ct)
+	}
+
+	body := decodeBody(t, rec)
+	// Envelope estándar (plano) + documento existente: exactamente 3 claves.
+	if len(body) != 3 {
+		t.Fatalf("envelope 409 debe tener exactamente 3 claves {code,message,document}, obtenidas %d: %v", len(body), body)
+	}
+	if body["code"] != "DUPLICATE_CHECKSUM" {
+		t.Errorf("code esperado %q, obtenido %v", "DUPLICATE_CHECKSUM", body["code"])
+	}
+	if msg, ok := body["message"].(string); !ok || msg == "" {
+		t.Errorf("message debe ser un string no vacío, obtenido %v", body["message"])
+	}
+
+	doc, ok := body["document"].(map[string]any)
+	if !ok {
+		t.Fatalf("'document' debe ser un objeto JSON, obtenido %v", body["document"])
+	}
+	// El documento existente llega completo: exactamente los 4 campos.
+	if len(doc) != 4 {
+		t.Fatalf("documento existente debe tener exactamente 4 campos, obtenidos %d: %v", len(doc), doc)
+	}
+	if doc["id"] != existing.ID {
+		t.Errorf("document.id esperado %q, obtenido %v", existing.ID, doc["id"])
+	}
+	if doc["filename"] != existing.Filename {
+		t.Errorf("document.filename esperado %q, obtenido %v", existing.Filename, doc["filename"])
+	}
+	if doc["extracted_text"] != existing.ExtractedText {
+		t.Errorf("document.extracted_text esperado %q, obtenido %v", existing.ExtractedText, doc["extracted_text"])
+	}
+	if doc["checksum"] != existing.Checksum {
+		t.Errorf("document.checksum esperado %q, obtenido %v", existing.Checksum, doc["checksum"])
+	}
+
+	// El conflicto se detecta en el único intento de inserción.
+	if repo.saveCalls != 1 {
+		t.Errorf("esperada 1 llamada a Save, obtenidas %d", repo.saveCalls)
+	}
+}
+
+// Caso 2: almacén caído -> 503 DEPENDENCY_UNAVAILABLE, envelope plano exacto.
+func TestCreateDocument_DependencyUnavailable_Returns503(t *testing.T) {
+	repo := newFakeDocumentRepository()
+	// El repositorio real envuelve el sentinel con la causa del driver.
+	repo.saveErr = fmt.Errorf("InsertOne: %w", domain.ErrDependencyUnavailable)
+	router := newTestRouter(repo)
+
+	rec := doRequest(t, router, http.MethodPost, "/documents",
+		`{"filename":"informe.pdf","extracted_text":"texto extraído","checksum":"sha256:abc123"}`)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("esperado status 503, obtenido %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type esperado application/json, obtenido %q", ct)
+	}
+
+	body := decodeBody(t, rec)
+	// Envelope estándar exacto: solo {code, message}, sin document ni extra.
+	if len(body) != 2 {
+		t.Fatalf("envelope 503 debe tener exactamente 2 claves {code,message}, obtenidas %d: %v", len(body), body)
+	}
+	if body["code"] != "DEPENDENCY_UNAVAILABLE" {
+		t.Errorf("code esperado %q, obtenido %v", "DEPENDENCY_UNAVAILABLE", body["code"])
+	}
+	if msg, ok := body["message"].(string); !ok || msg == "" {
+		t.Errorf("message debe ser un string no vacío, obtenido %v", body["message"])
+	}
+}
+
+// Caso 3: fallo inesperado del repositorio -> 500 INTERNAL_ERROR.
+func TestCreateDocument_UnexpectedError_Returns500(t *testing.T) {
+	repo := newFakeDocumentRepository()
+	repo.saveErr = errors.New("fallo inesperado")
+	router := newTestRouter(repo)
+
+	rec := doRequest(t, router, http.MethodPost, "/documents",
+		`{"filename":"informe.pdf","extracted_text":"texto extraído","checksum":"sha256:abc123"}`)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("esperado status 500, obtenido %d (body: %s)", rec.Code, rec.Body.String())
+	}
+
+	body := decodeBody(t, rec)
+	if len(body) != 2 {
+		t.Fatalf("envelope 500 debe tener exactamente 2 claves {code,message}, obtenidas %d: %v", len(body), body)
+	}
+	if body["code"] != "INTERNAL_ERROR" {
+		t.Errorf("code esperado %q, obtenido %v", "INTERNAL_ERROR", body["code"])
 	}
 }
 

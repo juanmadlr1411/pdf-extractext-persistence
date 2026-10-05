@@ -4,6 +4,7 @@ package mongo_test
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -13,19 +14,29 @@ import (
 	"github.com/pdf-extractext/persistence/internal/infra/mongo"
 )
 
-// Requiere Docker: testcontainers levanta un contenedor mongo:8 por test.
+// Requiere Docker: testcontainers levanta un contenedor de MongoDB por test.
 
 const (
 	testDB         = "pdf_extractext_test"
 	testCollection = "pdf_documents_test"
 )
 
-func startMongo(t *testing.T) string {
+// mongoImage permite sobreescribir la imagen de test (MONGO_TEST_IMAGE).
+// Por defecto se mantiene el pin del equipo: mongo:8. El override es útil
+// en CPUs sin AVX, donde MongoDB 5.0+ no arranca.
+func mongoImage() string {
+	if img := os.Getenv("MONGO_TEST_IMAGE"); img != "" {
+		return img
+	}
+	return "mongo:8"
+}
+
+func startMongoContainer(t *testing.T) (*mongodb.MongoDBContainer, string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	container, err := mongodb.Run(ctx, "mongo:8")
+	container, err := mongodb.Run(ctx, mongoImage())
 	if err != nil {
 		t.Fatalf("no se pudo levantar el contenedor de MongoDB: %v", err)
 	}
@@ -39,6 +50,12 @@ func startMongo(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("no se pudo obtener el connection string: %v", err)
 	}
+	return container, uri
+}
+
+func startMongo(t *testing.T) string {
+	t.Helper()
+	_, uri := startMongoContainer(t)
 	return uri
 }
 
