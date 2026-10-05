@@ -15,6 +15,10 @@ import (
 func NewRouter(cfg config.Config, docService *service.DocumentService, healthChecker service.HealthChecker) http.Handler {
 	r := chi.NewRouter()
 
+	// Correlación: primero se registra para que el request ID esté en el
+	// contexto disponible para el resto de middlewares, handlers y logs.
+	r.Use(requestIDMiddleware)
+
 	// Recuperación de pánico: cualquier caída responde INTERNAL_ERROR (500)
 	// con el envelope contractual, sin crashear la app.
 	r.Use(panicRecoveryMiddleware)
