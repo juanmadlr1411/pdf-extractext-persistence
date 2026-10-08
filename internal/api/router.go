@@ -29,6 +29,8 @@ func NewRouter(cfg config.Config, docService *service.DocumentService, healthChe
 	r.Get("/health", livenessHandler(cfg))
 	// Readiness: verifica el estado de la dependencia crítica (Mongo).
 	r.Get("/health/ready", readinessHandler(healthChecker))
+	// Alias convencional de orquestadores (Kubernetes-style probes).
+	r.Get("/readyz", readinessHandler(healthChecker))
 
 	return r
 }
