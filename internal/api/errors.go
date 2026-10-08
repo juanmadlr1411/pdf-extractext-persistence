@@ -12,26 +12,35 @@ import (
 // Catálogo cerrado de códigos de error del contrato API.
 // Prohibido añadir códigos fuera de esta lista (YAGNI).
 const (
-	codeInvalidRequest        = "INVALID_REQUEST"         // 400
-	codeNotFound              = "NOT_FOUND"               // 404
-	codeDuplicateChecksum     = "DUPLICATE_CHECKSUM"      // 409
-	codeFilenameTooLong       = "FILENAME_TOO_LONG"       // 422
-	codeInternalError         = "INTERNAL_ERROR"          // 500
-	codeDependencyUnavailable = "DEPENDENCY_UNAVAILABLE"  // 503
+	codeInvalidRequest        = "INVALID_REQUEST"        // 400
+	codeNotFound              = "NOT_FOUND"              // 404
+	codeDuplicateChecksum     = "DUPLICATE_CHECKSUM"     // 409
+	codeFilenameTooLong       = "FILENAME_TOO_LONG"      // 422
+	codeInternalError         = "INTERNAL_ERROR"         // 500
+	codeDependencyUnavailable = "DEPENDENCY_UNAVAILABLE" // 503
 )
 
 // errorResponse es el envelope de error del contrato: exactamente {code, message}.
 // Sin "details", sin stacktraces, sin RFC 9457.
+// document se adjunta únicamente en el 409 DUPLICATE_CHECKSUM para devolver
+// el documento existente que provoca el conflicto.
 type errorResponse struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code     string            `json:"code"`
+	Message  string            `json:"message"`
+	Document *documentResponse `json:"document,omitempty"`
 }
 
 // respondError serializa el envelope de error contractual con el status dado.
 func respondError(w http.ResponseWriter, code, message string, status int) {
+	respondErrorWithDocument(w, code, message, status, nil)
+}
+
+// respondErrorWithDocument serializa el envelope de error adjuntando, si
+// existe, el documento que provoca el conflicto (409 DUPLICATE_CHECKSUM).
+func respondErrorWithDocument(w http.ResponseWriter, code, message string, status int, doc *documentResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorResponse{Code: code, Message: message})
+	_ = json.NewEncoder(w).Encode(errorResponse{Code: code, Message: message, Document: doc})
 }
 
 // writeError se mantiene por compatibilidad con handlers existentes.

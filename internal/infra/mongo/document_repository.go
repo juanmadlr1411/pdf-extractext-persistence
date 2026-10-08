@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -25,6 +26,12 @@ func NewDocumentRepository(client *Client) *DocumentRepository {
 }
 
 // Save inserta el documento en la colección y lo devuelve con su ID.
+//
+// Anti-TOCTOU: inserta a ciegas confiando en el índice único de checksum;
+// solo si el driver reporta clave duplicada recupera el documento conflictivo
+// y lo devuelve envuelto en *domain.DuplicateChecksumError (tipo de la
+// issue #3). Si el almacén no está disponible, el error satisface
+// errors.Is(err, service.ErrDependencyUnavailable) y la API responde 503.
 func (r *DocumentRepository) Save(ctx context.Context, doc domain.Document) (domain.Document, error) {
 	res, err := r.client.Collection().InsertOne(ctx, bson.M{
 		"filename":       doc.Filename,
@@ -32,12 +39,65 @@ func (r *DocumentRepository) Save(ctx context.Context, doc domain.Document) (dom
 		"checksum":       doc.Checksum,
 	}, options.InsertOne())
 	if err != nil {
-		return domain.Document{}, fmt.Errorf("no se pudo insertar el documento: %w", err)
+		if mongo.IsDuplicateKeyError(err) {
+			return domain.Document{}, r.conflictWithExisting(ctx, doc.Checksum)
+		}
+		return domain.Document{}, translateMongoError(fmt.Errorf("no se pudo insertar el documento: %w", err))
 	}
 	if oid, ok := res.InsertedID.(bson.ObjectID); ok {
 		doc.ID = oid.Hex()
 	}
 	return doc, nil
+}
+
+// conflictWithExisting recupera el documento que ya posee el checksum para
+// construir el error de duplicado con la información completa. Solo se
+// invoca en el branch de error de clave duplicada, nunca en el flujo feliz.
+func (r *DocumentRepository) conflictWithExisting(ctx context.Context, checksum string) error {
+	res := r.client.Collection().FindOne(ctx, bson.M{"checksum": checksum})
+	var raw bson.M
+	if err := res.Decode(&raw); err != nil {
+		return translateMongoError(fmt.Errorf("no se pudo recuperar el documento existente: %w", err))
+	}
+	existing := documentFromBSON(raw)
+	return &domain.DuplicateChecksumError{Existing: domain.PDFDocument{
+		ID:            existing.ID,
+		Filename:      existing.Filename,
+		ExtractedText: existing.ExtractedText,
+		Checksum:      existing.Checksum,
+	}}
+}
+
+// translateMongoError clasifica un error del driver: los fallos de
+// conectividad (cliente desconectado, timeouts, red) se traducen a
+// service.ErrDependencyUnavailable; cualquier otro error se devuelve intacto
+// para que el llamador preserve su contexto de operación.
+func translateMongoError(err error) error {
+	switch {
+	case errors.Is(err, mongo.ErrClientDisconnected):
+		return dependencyDown(err)
+	case mongo.IsTimeout(err):
+		return dependencyDown(err)
+	case isNetworkError(err):
+		return dependencyDown(err)
+	default:
+		return err
+	}
+}
+
+// isNetworkError detecta fallos de transporte hacia el servidor. Se usa
+// errors.As sobre net.Error en lugar de mongo.IsNetworkError porque este
+// último solo reconoce errores etiquetados por el driver, no los net.Error
+// crudos que produce una conexión rechazada.
+func isNetworkError(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr)
+}
+
+// dependencyDown marca el error del driver como indisponibilidad del
+// almacén, preservando la causa original en la cadena de errores.
+func dependencyDown(err error) error {
+	return fmt.Errorf("%w: %w", service.ErrDependencyUnavailable, err)
 }
 
 // FindAll devuelve todos los documentos de la colección.
