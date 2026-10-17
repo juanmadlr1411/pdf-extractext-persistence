@@ -32,7 +32,7 @@ Hay dos formas de probar el servicio, según qué MongoDB uses:
 
 ```bash
 # 1. Levantar un Mongo propio
-docker run -d --name mongo-test -p 27017:27017 mongo:7.0
+docker run -d --name mongo-test -p 27017:27017 mongo:8
 
 # 2. Correr el servicio contra ese Mongo
 MONGO_URI="mongodb://localhost:27017" go run ./cmd/api
@@ -109,7 +109,7 @@ curl http://localhost:8002/health
 go test ./...
 ```
 
-Tests de integración (requieren Docker; testcontainers levanta `mongo:7.0` automáticamente):
+Tests de integración (requieren Docker; testcontainers levanta `mongo:8` automáticamente):
 
 ```bash
 go test ./... -tags=integration
