@@ -2,7 +2,7 @@
 
 Microservicio interno encargado de almacenar y recuperar documentos PDF (`filename`, `extracted_text`, `checksum`). Centraliza el acceso a MongoDB para los servicios de API y Extracción.
 
-> Estado actual: expone `GET /health` y gestiona la conexión a MongoDB con sus índices (`internal/infra/mongo`). El CRUD y el repositorio se implementarán en etapas posteriores.
+> Estado actual: CRUD completo de documentos sobre MongoDB (índice único `checksum_1`) con probes de liveness/readiness y apagado ordenado. El contrato de salida es `{id, filename, extracted_text, checksum}`.
 
 ## Requisitos
 
@@ -22,6 +22,23 @@ Variables de entorno:
 | `MONGO_DATABASE_NAME`   | Database de MongoDB          | `pdf_extractext`             |
 | `MONGO_COLLECTION_NAME` | Colección de documentos      | `pdf_documents`              |
 
+## API
+
+| Método | Ruta | Descripción |
+| ------ | ---- | ----------- |
+| `POST` | `/documents` | Crea un documento. `201`; `400` cuerpo inválido; `409` `DUPLICATE_CHECKSUM` (adjunta el documento existente que provoca el conflicto); `503` dependencia caída; `500`. |
+| `GET` | `/documents` | Lista todos los documentos (`200`). |
+| `GET` | `/documents/{id}` | Obtiene uno (`200`); `400` id con formato inválido; `404`. |
+| `PATCH` | `/documents/{id}` | Renombra (`{"filename": "..."}`); `200`; `400`; `404`; `422` `FILENAME_TOO_LONG`. |
+| `DELETE` | `/documents/{id}` | Elimina (`204`); `400` id inválido; `404`. |
+| `GET` | `/health` | Liveness (no depende de Mongo): `{"status":"ok","service":"...","environment":"..."}`. |
+| `GET` | `/health/ready` (alias `/readyz`) | Readiness: `200`, o `503 {"code":"DEPENDENCY_UNAVAILABLE"}` si Mongo no responde. |
+
+- **Entrada de `POST /documents`:** `{"filename": "...", "extracted_text": "...", "checksum": "..."}`.
+- **Contrato de salida:** `{"id": "<ObjectId hex>", "filename": "...", "extracted_text": "...", "checksum": "..."}`.
+- **Errores:** envelope `{"code": "...", "message": "..."}`. Códigos: `INVALID_REQUEST` (400), `NOT_FOUND` (404), `DUPLICATE_CHECKSUM` (409), `FILENAME_TOO_LONG` (422), `INTERNAL_ERROR` (500), `DEPENDENCY_UNAVAILABLE` (503).
+- `PATCH` solo acepta `filename` (máx. 100 caracteres); el resto de los campos se ignora.
+
 ## Ejecutar en local
 
 Hay dos formas de probar el servicio, según qué MongoDB uses:
@@ -40,67 +57,37 @@ MONGO_URI="mongodb://localhost:27017" go run ./cmd/api
 
 ### Opción 2 — Contra la infraestructura del equipo (docker-compose)
 
-El Mongo del repo `pdf-extractext-infrastructure` **no publica el puerto al
-host** (solo el Persistence Service accede a él). Por eso el servicio debe
-correr como contenedor dentro de la misma red Docker (`data` del compose)
-y con autenticación (usuario/contraseña definidos en el `.env` de ese repo).
-
-Los nombres concretos (red, hostname y contenedor) derivan del `name:` y los
-servicios declarados en el `docker-compose.yml` de infraestructura. Verificalos
-antes de correr los comandos, por si cambian:
+El Mongo del compose **no publica el puerto al host**: solo Persistence accede
+a él. Por eso el servicio debe correr como contenedor en la red `data`, con
+las credenciales del `.env` de infraestructura:
 
 ```bash
-docker network ls   # buscar <nombre-del-proyecto>_data
-docker ps           # buscar el contenedor de MongoDB
-```
-
-Con los valores actuales del compose (`name: pdf-extractext`, servicio
-`mongodb`, credenciales de desarrollo en `.env`):
-
-```bash
-# 1. Levantar la infraestructura (desde el repo infrastructure)
+# 1. Desde el repo infrastructure
 docker compose up -d mongodb
 
-# 2. Construir la imagen del servicio (desde este repo)
+# 2. Desde este repo: construir y correr en la red de datos
 docker build -t pdf-extractext-persistence .
-
-# 3. Correr el servicio dentro de la red de datos
-#    - <proyecto>_data: red "data" del compose
-#    - <usuario>:<password>@mongodb: credenciales del .env y hostname del
-#      servicio Mongo dentro de la red
-#    (-p 8002:8002 publica el puerto al host para poder hacer curl)
-docker run --rm --network "<proyecto>_data" \
-  -p 8002:8002 \
+docker run --rm --network "pdf-extractext_data" -p 8002:8002 \
   -e MONGO_URI="mongodb://<usuario>:<password>@mongodb:27017" \
   pdf-extractext-persistence
 ```
 
-Para verificar que el servicio creó el índice único (reemplazá
-`<contenedor-mongo>`, usuario y contraseña por los del compose):
+Para verificar el índice único (credenciales y contenedor del compose):
 
 ```bash
-docker exec <contenedor-mongo> mongosh --quiet \
+docker exec pdf-extractext-mongodb-1 mongosh --quiet \
   -u <usuario> -p <password> --authenticationDatabase admin \
   --eval 'db.getSiblingDB("pdf_extractext").pdf_documents.getIndexes()'
 # Debe incluir: { key: { checksum: 1 }, name: 'checksum_1', unique: true }
 ```
 
-> **Ownership de índices**: al arrancar, el servicio garantiza el índice único
-> `checksum_1` sobre la colección (operación idempotente, segura de repetir en
-> cada arranque). Si no puede conectar a MongoDB o crear los índices, el
-> servicio **no levanta el servidor HTTP** (fail-fast).
+> **Ownership de índices**: el servicio crea el índice único `checksum_1` al arrancar (idempotente) y, si no puede, **no levanta el servidor HTTP** (fail-fast).
 
 En cualquiera de las dos opciones, verificá el estado del servicio con:
 
 ```bash
 curl http://localhost:8002/health
-```
-
-Luego:
-
-```bash
-curl http://localhost:8002/health
-# {"environment":"local","service":"pdf-extractext-persistence","status":"ok"}
+# {"status":"ok","service":"pdf-extractext-persistence","environment":"local"}
 ```
 
 ## Tests
@@ -124,17 +111,19 @@ docker run --rm -p 8002:8002 \
   pdf-extractext-persistence
 ```
 
-> El contenedor necesita alcanzar un MongoDB: ver "Ejecutar en local" para las opciones (Mongo propio o red `pdf-extractext_data` de la infraestructura del equipo).
-
-> Para correr el contenedor contra el MongoDB de `pdf-extractext-infrastructure`,
-> ver la sección "Ejecutar en local", Opción 2.
+> El contenedor necesita alcanzar un MongoDB: ver "Ejecutar en local" (Mongo propio o red `pdf-extractext_data` de infraestructura).
 
 ## Estructura
 
 ```
-cmd/api/            # Entrypoint (main): config + Mongo lifecycle + servidor HTTP con graceful shutdown
+cmd/
+├── api/            # Entrypoint: config + Mongo lifecycle + servidor HTTP + graceful shutdown
+└── healthprobe/    # Probe para la imagen distroless
 internal/
 ├── config/         # Configuración vía variables de entorno
-├── api/            # Router (chi) y handlers: GET /health
-└── infra/mongo/    # Cliente MongoDB: lifecycle y ownership de índices (checksum_1 único)
+├── api/            # Router (chi), handlers y middlewares (X-Request-ID, panic recovery)
+├── domain/         # Entidades (Document, PDFDocument) y errores de dominio
+├── service/        # Lógica de aplicación (DocumentService, health)
+├── repository/     # Repositorio PDFDocument sobre MongoDB
+└── infra/mongo/    # Cliente MongoDB: lifecycle, mapper y ownership de índices (checksum_1 único)
 ```
