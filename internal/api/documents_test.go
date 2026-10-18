@@ -249,20 +249,7 @@ func TestGetDocumentByID_InvalidID_Returns400(t *testing.T) {
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("esperado status 400, obtenido %d (body: %s)", rec.Code, rec.Body.String())
 			}
-			if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
-				t.Fatalf("Content-Type esperado application/json, obtenido %q", ct)
-			}
-
-			body := decodeBody(t, rec)
-			if len(body) != 2 {
-				t.Fatalf("envelope de error debe tener exactamente 2 campos, obtenidos %d: %v", len(body), body)
-			}
-			if body["code"] != "INVALID_REQUEST" {
-				t.Errorf("code esperado %q, obtenido %v", "INVALID_REQUEST", body["code"])
-			}
-			if msg, ok := body["message"].(string); !ok || msg == "" {
-				t.Errorf("message debe ser un string no vacío, obtenido %v", body["message"])
-			}
+			assertProblem(t, rec, "INVALID_REQUEST")
 
 			// Fail-fast: el handler no debe haber tocado el repositorio.
 			if repo.findCalls != 0 {
@@ -282,20 +269,7 @@ func TestGetDocumentByID_NotFound_Returns404(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("esperado status 404, obtenido %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
-		t.Fatalf("Content-Type esperado application/json, obtenido %q", ct)
-	}
-
-	body := decodeBody(t, rec)
-	if len(body) != 2 {
-		t.Fatalf("envelope de error debe tener exactamente 2 campos, obtenidos %d: %v", len(body), body)
-	}
-	if body["code"] != "NOT_FOUND" {
-		t.Errorf("code esperado %q, obtenido %v", "NOT_FOUND", body["code"])
-	}
-	if msg, ok := body["message"].(string); !ok || msg == "" {
-		t.Errorf("message debe ser un string no vacío, obtenido %v", body["message"])
-	}
+	assertProblem(t, rec, "NOT_FOUND")
 
 	// El ID era válido: el repositorio SÍ debió ser consultado exactamente una vez.
 	if repo.findCalls != 1 {

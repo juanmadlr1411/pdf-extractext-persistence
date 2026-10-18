@@ -13,9 +13,8 @@ import (
 )
 
 // TestPanicRecoveryMiddleware verifica que un pánico en cualquier handler es
-// interceptado: la app no crashea y se responde con HTTP 500 y el envelope
-// contractual {"code": "INTERNAL_ERROR", "message": "..."} sin filtrar
-// información interna (ni el mensaje del pánico ni stacktraces).
+// interceptado: la app no crashea y se responde con HTTP 500 y el problem
+// RFC 9457 INTERNAL_ERROR sin filtrar información interna.
 func TestPanicRecoveryMiddleware(t *testing.T) {
 	t.Parallel()
 
@@ -35,23 +34,22 @@ func TestPanicRecoveryMiddleware(t *testing.T) {
 	if res.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusInternalServerError)
 	}
-	if ct := res.Header.Get("Content-Type"); ct != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", ct)
+	if ct := res.Header.Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("Content-Type = %q, want application/problem+json", ct)
 	}
 
 	var body map[string]any
 	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
 		t.Fatalf("respuesta no es JSON válido: %v", err)
 	}
-	if len(body) != 2 {
-		t.Errorf("el envelope debe tener exactamente 2 campos, tiene %d: %v", len(body), body)
+	if len(body) != 5 {
+		t.Errorf("el problem debe tener exactamente 5 campos, tiene %d: %v", len(body), body)
 	}
 	if body["code"] != "INTERNAL_ERROR" {
 		t.Errorf("code = %v, want INTERNAL_ERROR", body["code"])
 	}
-	msg, ok := body["message"].(string)
-	if !ok || msg == "" {
-		t.Fatalf("message ausente o vacío: %v", body["message"])
+	if detail, ok := body["detail"].(string); !ok || detail == "" {
+		t.Fatalf("detail ausente o vacío: %v", body["detail"])
 	}
 
 	// Sin fugas de información: ni el mensaje del pánico ni stacktrace.

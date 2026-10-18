@@ -244,20 +244,30 @@ func assertField(t *testing.T, rule, key string, body map[string]any, want strin
 	}
 }
 
-// assertErrorEnvelope verifica el envelope de error ESTRICTO: exactamente
-// {code, message} con el code del catálogo. En los errores estándar ningún
-// campo extra está permitido (ni details, ni stacktrace, ni document).
-func assertErrorEnvelope(t *testing.T, rule, raw, wantCode string) map[string]any {
+// assertProblem verifica la respuesta de error RFC 9457: exactamente
+// {type, title, status, detail, code} con el code del catálogo. En los
+// errores estándar ningún campo extra está permitido (ni details, ni
+// stacktrace, ni document).
+func assertProblem(t *testing.T, rule, raw string, status int, wantCode string) map[string]any {
 	t.Helper()
 	body := decodeJSONObject(t, rule, raw)
-	if len(body) != 2 {
-		t.Errorf("%s: REGLA VIOLADA — el envelope debe ser estricto {code, message} sin campos extra; claves obtenidas %d: %v", rule, len(body), body)
+	if len(body) != 5 {
+		t.Errorf("%s: REGLA VIOLADA — el problem debe ser estricto {type, title, status, detail, code}; claves obtenidas %d: %v", rule, len(body), body)
 	}
 	if body["code"] != wantCode {
 		t.Errorf("%s: REGLA VIOLADA — code %v, el catálogo del contrato exige %q", rule, body["code"], wantCode)
 	}
-	if msg, ok := body["message"].(string); !ok || msg == "" {
-		t.Errorf("%s: REGLA VIOLADA — message debe ser un string no vacío; obtenido %v", rule, body["message"])
+	if detail, ok := body["detail"].(string); !ok || detail == "" {
+		t.Errorf("%s: REGLA VIOLADA — detail debe ser un string no vacío; obtenido %v", rule, body["detail"])
+	}
+	if body["status"] != float64(status) {
+		t.Errorf("%s: REGLA VIOLADA — status del problem %v, el contrato exige %d", rule, body["status"], status)
+	}
+	if title, ok := body["title"].(string); !ok || title == "" {
+		t.Errorf("%s: REGLA VIOLADA — title debe ser un string no vacío; obtenido %v", rule, body["title"])
+	}
+	if urn, ok := body["type"].(string); !ok || urn == "" {
+		t.Errorf("%s: REGLA VIOLADA — type (URN) debe ser un string no vacío; obtenido %v", rule, body["type"])
 	}
 	return body
 }

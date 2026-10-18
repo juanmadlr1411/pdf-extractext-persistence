@@ -105,21 +105,21 @@ func TestReadiness_MongoDown_Returns503(t *testing.T) {
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("esperado 503, obtenido %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
-		t.Fatalf("Content-Type esperado application/json, obtenido %q", ct)
+	if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Fatalf("Content-Type esperado application/problem+json, obtenido %q", ct)
 	}
 
 	var body map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("cuerpo no es JSON válido: %v", err)
 	}
-	if len(body) != 2 {
-		t.Fatalf("envelope de error debe tener exactamente 2 campos, obtenidos %d: %v", len(body), body)
+	if len(body) != 5 {
+		t.Fatalf("el problem debe tener exactamente 5 campos, obtenidos %d: %v", len(body), body)
 	}
 	if body["code"] != "DEPENDENCY_UNAVAILABLE" {
 		t.Errorf("code esperado %q, obtenido %v", "DEPENDENCY_UNAVAILABLE", body["code"])
 	}
-	if msg, ok := body["message"].(string); !ok || msg == "" {
-		t.Errorf("message debe ser un string no vacío, obtenido %v", body["message"])
+	if detail, ok := body["detail"].(string); !ok || detail == "" {
+		t.Errorf("detail ausente o vacío: %v", body["detail"])
 	}
 }

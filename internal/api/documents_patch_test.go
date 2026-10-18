@@ -125,13 +125,7 @@ func TestPatchDocument_InvalidRequest_Returns400(t *testing.T) {
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("esperado status 400, obtenido %d (body: %s)", rec.Code, rec.Body.String())
 			}
-			body := decodeBody(t, rec)
-			if len(body) != 2 {
-				t.Fatalf("envelope de error debe tener exactamente 2 campos, obtenidos %d: %v", len(body), body)
-			}
-			if body["code"] != "INVALID_REQUEST" {
-				t.Errorf("code esperado %q, obtenido %v", "INVALID_REQUEST", body["code"])
-			}
+			assertProblem(t, rec, "INVALID_REQUEST")
 			if repo.updateCalls != 0 {
 				t.Errorf("el repositorio no debe ser tocado, recibió %d llamadas", repo.updateCalls)
 			}
@@ -150,10 +144,7 @@ func TestPatchDocument_InvalidID_Returns400(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("esperado status 400, obtenido %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	body := decodeBody(t, rec)
-	if body["code"] != "INVALID_REQUEST" {
-		t.Errorf("code esperado %q, obtenido %v", "INVALID_REQUEST", body["code"])
-	}
+	assertProblem(t, rec, "INVALID_REQUEST")
 	if repo.updateCalls != 0 {
 		t.Errorf("fail-fast violado: el repositorio recibió %d llamadas con un ID inválido", repo.updateCalls)
 	}
@@ -170,13 +161,7 @@ func TestPatchDocument_NotFound_Returns404(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("esperado status 404, obtenido %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	body := decodeBody(t, rec)
-	if len(body) != 2 {
-		t.Fatalf("envelope de error debe tener exactamente 2 campos, obtenidos %d: %v", len(body), body)
-	}
-	if body["code"] != "NOT_FOUND" {
-		t.Errorf("code esperado %q, obtenido %v", "NOT_FOUND", body["code"])
-	}
+	assertProblem(t, rec, "NOT_FOUND")
 }
 
 // Filename de 101 caracteres -> 422 FILENAME_TOO_LONG (validación en Service).
@@ -196,13 +181,7 @@ func TestPatchDocument_FilenameTooLong_Returns422(t *testing.T) {
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("esperado status 422, obtenido %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	body := decodeBody(t, rec)
-	if len(body) != 2 {
-		t.Fatalf("envelope de error debe tener exactamente 2 campos, obtenidos %d: %v", len(body), body)
-	}
-	if body["code"] != "FILENAME_TOO_LONG" {
-		t.Errorf("code esperado %q, obtenido %v", "FILENAME_TOO_LONG", body["code"])
-	}
+	assertProblem(t, rec, "FILENAME_TOO_LONG")
 	if got := repo.byID["507f1f77bcf86cd799439011"].Filename; got != "original.pdf" {
 		t.Errorf("el filename no debe mutar ante un 422, obtenido %q", got)
 	}

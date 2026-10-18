@@ -36,7 +36,7 @@ Variables de entorno:
 
 - **Entrada de `POST /documents`:** `{"filename": "...", "extracted_text": "...", "checksum": "..."}`.
 - **Contrato de salida:** `{"id": "<ObjectId hex>", "filename": "...", "extracted_text": "...", "checksum": "..."}`.
-- **Errores:** envelope `{"code": "...", "message": "..."}`. Códigos: `INVALID_REQUEST` (400), `NOT_FOUND` (404), `DUPLICATE_CHECKSUM` (409), `FILENAME_TOO_LONG` (422), `INTERNAL_ERROR` (500), `DEPENDENCY_UNAVAILABLE` (503).
+- **Errores:** problem RFC 9457 (`application/problem+json`) con `{type, title, status, detail, code}` (+ `document` en el 409). Códigos: `INVALID_REQUEST` (400), `NOT_FOUND` (404), `DUPLICATE_CHECKSUM` (409), `FILENAME_TOO_LONG` (422), `INTERNAL_ERROR` (500), `DEPENDENCY_UNAVAILABLE` (503).
 - `PATCH` solo acepta `filename` (máx. 100 caracteres); el resto de los campos se ignora.
 
 ## Ejecutar en local

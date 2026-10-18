@@ -44,13 +44,7 @@ func TestDeleteDocument_SecondDelete_Returns404(t *testing.T) {
 	if second.Code != http.StatusNotFound {
 		t.Fatalf("segundo DELETE: esperado 404, obtenido %d (body: %s)", second.Code, second.Body.String())
 	}
-	body := decodeBody(t, second)
-	if len(body) != 2 {
-		t.Fatalf("envelope de error debe tener exactamente 2 campos, obtenidos %d: %v", len(body), body)
-	}
-	if body["code"] != "NOT_FOUND" {
-		t.Errorf("code esperado %q, obtenido %v", "NOT_FOUND", body["code"])
-	}
+	assertProblem(t, second, "NOT_FOUND")
 }
 
 // ID de formato inválido -> 400 fail-fast sin tocar el repositorio.
@@ -63,13 +57,7 @@ func TestDeleteDocument_InvalidID_Returns400(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("esperado status 400, obtenido %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	body := decodeBody(t, rec)
-	if len(body) != 2 {
-		t.Fatalf("envelope de error debe tener exactamente 2 campos, obtenidos %d: %v", len(body), body)
-	}
-	if body["code"] != "INVALID_REQUEST" {
-		t.Errorf("code esperado %q, obtenido %v", "INVALID_REQUEST", body["code"])
-	}
+	assertProblem(t, rec, "INVALID_REQUEST")
 	if repo.deleteCalls != 0 {
 		t.Errorf("fail-fast violado: el repositorio recibió %d llamadas con un ID inválido", repo.deleteCalls)
 	}

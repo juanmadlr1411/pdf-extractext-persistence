@@ -4,11 +4,11 @@
 //	| Fila  | Método y escenario                            | Status | Cuerpo esperado                                              |
 //	|-------|-----------------------------------------------|--------|--------------------------------------------------------------|
 //	| C2.1  | POST /documents exitoso                       | 201    | documento exacto {id hex-24, filename, extracted_text, checksum} |
-//	| C2.2  | cuerpos/IDs inválidos                         | 400    | envelope estricto {code: INVALID_REQUEST, message}           |
-//	| C2.3  | POST con checksum ya persistido (caso estrella)| 409   | envelope {code: DUPLICATE_CHECKSUM, message} + document completo |
-//	| C2.4  | dependencia (MongoDB) caída                   | 503    | envelope estricto {code: DEPENDENCY_UNAVAILABLE, message}    |
-//	| C2.5  | recurso inexistente / DELETE repetido         | 404    | envelope estricto {code: NOT_FOUND, message}                  |
-//	| C2.6  | PATCH con filename > 100 caracteres           | 422    | envelope estricto {code: FILENAME_TOO_LONG, message}         |
+//	| C2.2  | cuerpos/IDs inválidos                         | 400    | problem RFC 9457, code INVALID_REQUEST                       |
+//	| C2.3  | POST con checksum ya persistido (caso estrella)| 409   | problem RFC 9457, code DUPLICATE_CHECKSUM + document completo |
+//	| C2.4  | dependencia (MongoDB) caída                   | 503    | problem RFC 9457, code DEPENDENCY_UNAVAILABLE                |
+//	| C2.5  | recurso inexistente / DELETE repetido         | 404    | problem RFC 9457, code NOT_FOUND                             |
+//	| C2.6  | PATCH con filename > 100 caracteres           | 422    | problem RFC 9457, code FILENAME_TOO_LONG                     |
 //	| C2.7  | GET /documents/{id} existente                 | 200    | documento exacto (4 campos)                                  |
 //	| C2.8  | GET /documents (listado)                      | 200    | array JSON; vacío se serializa [] (nunca null)               |
 //	| C2.9  | PATCH rename / mismo valor                    | 200    | documento con filename mutado; idempotente                   |
@@ -84,7 +84,7 @@ func TestC2_01_CreateDocument_HappyPath(t *testing.T) {
 // TestC2_02_InvalidRequest_400 verifica cada variante de petición inválida:
 // JSON malformado, cuerpo vacío, filename ausente en PATCH e IDs de recurso
 // que no cumplen el formato hex-24. Todas responden 400 con el code
-// INVALID_REQUEST del catálogo y el envelope estricto {code, message}.
+// INVALID_REQUEST del catálogo y el problem RFC 9457.
 func TestC2_02_InvalidRequest_400(t *testing.T) {
 	t.Parallel()
 
@@ -113,7 +113,7 @@ func TestC2_02_InvalidRequest_400(t *testing.T) {
 			res := doRequest(t, srv, tc.method, tc.path, tc.body, nil)
 
 			assertStatus(t, rule, res.status, http.StatusBadRequest)
-			assertErrorEnvelope(t, rule, res.body, "INVALID_REQUEST")
+			assertProblem(t, rule, res.body, http.StatusBadRequest, "INVALID_REQUEST")
 		})
 	}
 }
@@ -121,10 +121,10 @@ func TestC2_02_InvalidRequest_400(t *testing.T) {
 // --- Fila C2.3: Caso estrella 409 DUPLICATE_CHECKSUM ---
 
 // TestC2_03_DuplicateChecksum_409 verifica el conflicto: POST con un
-// checksum ya persistido responde 409 con el envelope de error MÁS el
-// documento existente completo en la clave 'document' (exactamente 3
-// claves {code, message, document}). El conflicto se detecta en el único
-// intento de inserción (anti-TOCTOU observable).
+// checksum ya persistido responde 409 con el problem RFC 9457 MÁS el
+// documento existente completo en la clave 'document' (exactamente 6
+// claves). El conflicto se detecta en el único intento de inserción
+// (anti-TOCTOU observable).
 func TestC2_03_DuplicateChecksum_409(t *testing.T) {
 	t.Parallel()
 	const rule = "C2.3 · POST con checksum duplicado → 409 DUPLICATE_CHECKSUM + documento existente"
@@ -143,15 +143,17 @@ func TestC2_03_DuplicateChecksum_409(t *testing.T) {
 		`{"filename":"copia.pdf","extracted_text":"otro texto","checksum":"sha256:conflicto"}`, nil)
 
 	assertStatus(t, rule, res.status, http.StatusConflict)
-	assertJSONContentType(t, rule, res)
+	if ct := res.header.Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("%s: REGLA VIOLADA — Content-Type %q, el contrato exige application/problem+json", rule, ct)
+	}
 
 	body := decodeJSONObject(t, rule, res.body)
-	if len(body) != 3 {
-		t.Fatalf("%s: REGLA VIOLADA — el 409 viaja con el envelope de error MÁS el documento existente: exactamente 3 claves {code, message, document}; obtenidas %d: %v", rule, len(body), body)
+	if len(body) != 6 {
+		t.Fatalf("%s: REGLA VIOLADA — el 409 viaja con el problem RFC 9457 MÁS el documento existente: exactamente 6 claves {type, title, status, detail, code, document}; obtenidas %d: %v", rule, len(body), body)
 	}
 	assertField(t, rule, "code", body, "DUPLICATE_CHECKSUM")
-	if msg, ok := body["message"].(string); !ok || msg == "" {
-		t.Errorf("%s: REGLA VIOLADA — message debe ser un string no vacío; obtenido %v", rule, body["message"])
+	if detail, ok := body["detail"].(string); !ok || detail == "" {
+		t.Errorf("%s: REGLA VIOLADA — detail debe ser un string no vacío; obtenido %v", rule, body["detail"])
 	}
 
 	doc, ok := body["document"].(map[string]any)
@@ -170,7 +172,7 @@ func TestC2_03_DuplicateChecksum_409(t *testing.T) {
 // TestC2_04_DependencyUnavailable_503 verifica la indisponibilidad de la
 // dependencia crítica: tanto la escritura contra el almacén caído como el
 // readiness check responden 503 con el code DEPENDENCY_UNAVAILABLE y el
-// envelope estricto de 2 claves (sin document ni campos extra).
+// problem RFC 9457 (sin document ni campos extra).
 func TestC2_04_DependencyUnavailable_503(t *testing.T) {
 	t.Parallel()
 
@@ -185,7 +187,7 @@ func TestC2_04_DependencyUnavailable_503(t *testing.T) {
 		res := doRequest(t, srv, http.MethodPost, "/documents", createPayload, nil)
 
 		assertStatus(t, rule, res.status, http.StatusServiceUnavailable)
-		assertErrorEnvelope(t, rule, res.body, "DEPENDENCY_UNAVAILABLE")
+		assertProblem(t, rule, res.body, http.StatusServiceUnavailable, "DEPENDENCY_UNAVAILABLE")
 	})
 
 	t.Run("readiness con dependencia caída", func(t *testing.T) {
@@ -198,7 +200,7 @@ func TestC2_04_DependencyUnavailable_503(t *testing.T) {
 		res := doRequest(t, srv, http.MethodGet, "/health/ready", "", nil)
 
 		assertStatus(t, rule, res.status, http.StatusServiceUnavailable)
-		assertErrorEnvelope(t, rule, res.body, "DEPENDENCY_UNAVAILABLE")
+		assertProblem(t, rule, res.body, http.StatusServiceUnavailable, "DEPENDENCY_UNAVAILABLE")
 	})
 }
 
@@ -221,7 +223,7 @@ func TestC2_05_NotFound_404(t *testing.T) {
 		res := doRequest(t, srv, http.MethodGet, "/documents/"+missingObjectID, "", nil)
 
 		assertStatus(t, rule, res.status, http.StatusNotFound)
-		assertErrorEnvelope(t, rule, res.body, "NOT_FOUND")
+		assertProblem(t, rule, res.body, http.StatusNotFound, "NOT_FOUND")
 	})
 
 	t.Run("PATCH inexistente", func(t *testing.T) {
@@ -232,7 +234,7 @@ func TestC2_05_NotFound_404(t *testing.T) {
 		res := doRequest(t, srv, http.MethodPatch, "/documents/"+missingObjectID, `{"filename":"nuevo.pdf"}`, nil)
 
 		assertStatus(t, rule, res.status, http.StatusNotFound)
-		assertErrorEnvelope(t, rule, res.body, "NOT_FOUND")
+		assertProblem(t, rule, res.body, http.StatusNotFound, "NOT_FOUND")
 	})
 
 	t.Run("DELETE repetido (idempotencia por ausencia)", func(t *testing.T) {
@@ -247,7 +249,7 @@ func TestC2_05_NotFound_404(t *testing.T) {
 
 		second := doRequest(t, srv, http.MethodDelete, "/documents/"+validObjectID, "", nil)
 		assertStatus(t, rule, second.status, http.StatusNotFound)
-		assertErrorEnvelope(t, rule, second.body, "NOT_FOUND")
+		assertProblem(t, rule, second.body, http.StatusNotFound, "NOT_FOUND")
 	})
 }
 
@@ -255,7 +257,7 @@ func TestC2_05_NotFound_404(t *testing.T) {
 
 // TestC2_06_FilenameTooLong_422 verifica el invariante de dominio de la
 // longitud del filename en la mutación: más de 100 caracteres responde 422
-// con el code FILENAME_TOO_LONG del catálogo y envelope estricto.
+// con el code FILENAME_TOO_LONG del catálogo y problem RFC 9457.
 func TestC2_06_FilenameTooLong_422(t *testing.T) {
 	t.Parallel()
 	const rule = "C2.6 · PATCH con filename de 101 caracteres → 422 FILENAME_TOO_LONG"
@@ -269,7 +271,7 @@ func TestC2_06_FilenameTooLong_422(t *testing.T) {
 		`{"filename":"`+tooLong+`"}`, nil)
 
 	assertStatus(t, rule, res.status, http.StatusUnprocessableEntity)
-	assertErrorEnvelope(t, rule, res.body, "FILENAME_TOO_LONG")
+	assertProblem(t, rule, res.body, http.StatusUnprocessableEntity, "FILENAME_TOO_LONG")
 }
 
 // --- Fila C2.7: GET por id, documento exacto ---

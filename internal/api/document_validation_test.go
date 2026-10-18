@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -97,25 +96,8 @@ func TestCreateDocument_ContractRejections(t *testing.T) {
 				t.Fatalf("esperado status %d, obtenido %d (body: %s)", tt.wantStatus, rec.Code, rec.Body.String())
 			}
 
-			// Assert: Content-Type
-			if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
-				t.Fatalf("Content-Type esperado application/json, obtenido %q", ct)
-			}
-
-			// Assert: envelope de error con EXACTAMENTE {code, message}
-			var body map[string]any
-			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-				t.Fatalf("cuerpo no es JSON válido: %v", err)
-			}
-			if len(body) != 2 {
-				t.Fatalf("esperados exactamente 2 campos (code, message), obtenidos %d: %v", len(body), body)
-			}
-			if body["code"] != tt.wantCode {
-				t.Errorf("code esperado %q, obtenido %v", tt.wantCode, body["code"])
-			}
-			if _, ok := body["message"].(string); !ok {
-				t.Errorf("campo 'message' ausente o no es string: %v", body["message"])
-			}
+			// Assert: problem RFC 9457 con el code esperado.
+			assertProblem(t, rec, tt.wantCode)
 		})
 	}
 }

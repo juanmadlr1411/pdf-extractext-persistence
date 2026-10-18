@@ -73,9 +73,8 @@ func TestTranslateErrorFallback(t *testing.T) {
 	}
 }
 
-// TestRespondErrorEnvelope verifica el helper respondError: envelope exacto
-// {code, message}, status correcto, Content-Type JSON, sin campos extra
-// (prohibido "details") y sin stacktraces.
+// TestRespondErrorEnvelope verifica el helper respondError: problem RFC 9457
+// exacto {type, title, status, detail, code}, sin stacktraces ni detalle interno.
 func TestRespondErrorEnvelope(t *testing.T) {
 	t.Parallel()
 
@@ -101,26 +100,36 @@ func TestRespondErrorEnvelope(t *testing.T) {
 			if res.StatusCode != tc.status {
 				t.Errorf("status = %d, want %d", res.StatusCode, tc.status)
 			}
-			if ct := res.Header.Get("Content-Type"); ct != "application/json" {
-				t.Errorf("Content-Type = %q, want application/json", ct)
+			if ct := res.Header.Get("Content-Type"); ct != "application/problem+json" {
+				t.Errorf("Content-Type = %q, want application/problem+json", ct)
 			}
 
 			var body map[string]any
 			if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
 				t.Fatalf("respuesta no es JSON válido: %v", err)
 			}
-			if len(body) != 2 {
-				t.Errorf("el envelope debe tener exactamente 2 campos, tiene %d: %v", len(body), body)
+			if len(body) != 5 {
+				t.Errorf("el problem debe tener exactamente 5 campos, tiene %d: %v", len(body), body)
 			}
 			if body["code"] != tc.code {
 				t.Errorf("code = %v, want %q", body["code"], tc.code)
 			}
-			if body["message"] != "mensaje de prueba" {
-				t.Errorf("message = %v, want %q", body["message"], "mensaje de prueba")
+			if body["detail"] != "mensaje de prueba" {
+				t.Errorf("detail = %v, want %q", body["detail"], "mensaje de prueba")
 			}
-			for _, forbidden := range []string{"details", "stacktrace", "stack", "type", "title", "instance"} {
+			if body["status"] != float64(tc.status) {
+				t.Errorf("status = %v, want %d", body["status"], tc.status)
+			}
+			wantURN := "urn:pdf-extractext:" + problemCatalog[tc.code].urn
+			if body["type"] != wantURN {
+				t.Errorf("type = %v, want %q", body["type"], wantURN)
+			}
+			if body["title"] != problemCatalog[tc.code].title {
+				t.Errorf("title = %v, want %q", body["title"], problemCatalog[tc.code].title)
+			}
+			for _, forbidden := range []string{"stacktrace", "stack", "instance"} {
 				if _, ok := body[forbidden]; ok {
-					t.Errorf("campo prohibido %q presente en el envelope", forbidden)
+					t.Errorf("campo prohibido %q presente en el problema", forbidden)
 				}
 			}
 		})
