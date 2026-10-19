@@ -46,6 +46,9 @@ func main() {
 		Addr:              ":" + cfg.Port,
 		Handler:           api.NewRouter(cfg, docService, db),
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
