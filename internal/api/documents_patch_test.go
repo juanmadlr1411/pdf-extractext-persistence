@@ -9,7 +9,7 @@ import (
 	"github.com/pdf-extractext/persistence/internal/domain"
 )
 
-// --- Tests de la Issue #8: PATCH /documents/{id} ---
+// --- Tests de PATCH /documents/{id} ---
 
 func seedDocument() domain.Document {
 	return domain.Document{

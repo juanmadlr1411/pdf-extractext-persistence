@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// --- Tests de la Issue #9: DELETE /documents/{id} ---
+// --- Tests de DELETE /documents/{id} ---
 
 // DELETE sobre un documento existente -> 204 sin cuerpo.
 func TestDeleteDocument_Existing_Returns204(t *testing.T) {

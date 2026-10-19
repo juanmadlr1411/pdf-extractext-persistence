@@ -64,7 +64,7 @@ func TestHealth_Returns200WithOKStatus(t *testing.T) {
 	}
 }
 
-// --- Tests de readiness de la Issue #12 ---
+// --- Tests de readiness ---
 
 // Caso 1: GET /health/ready con dependencia OK -> 200 OK.
 func TestReadiness_MongoOK_Returns200(t *testing.T) {

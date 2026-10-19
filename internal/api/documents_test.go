@@ -115,7 +115,7 @@ func decodeBody(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	return body
 }
 
-// --- Tests de la Issue #4 (en verde) ---
+// --- Tests de POST /documents ---
 
 func TestCreateDocument_Returns201WithFourFields(t *testing.T) {
 	repo := newFakeDocumentRepository()
@@ -153,7 +153,7 @@ func TestCreateDocument_Returns201WithFourFields(t *testing.T) {
 	}
 }
 
-// --- Tests de la Issue #7 ---
+// --- Tests de GET /documents ---
 
 // Caso 1: GET /documents con repositorio vacío -> 200 y array JSON vacío.
 func TestListDocuments_EmptyRepo_ReturnsEmptyJSONArray(t *testing.T) {

@@ -84,7 +84,7 @@ func TestPanicRecoveryMiddlewarePassthrough(t *testing.T) {
 	}
 }
 
-// --- Tests del middleware de correlación X-Request-ID (Issue #11) ---
+// --- Tests del middleware de correlación X-Request-ID ---
 
 // TestRequestIDMiddleware_PropagatesIncomingHeader verifica que, cuando el
 // cliente envía el header X-Request-ID, el middleware propaga exactamente

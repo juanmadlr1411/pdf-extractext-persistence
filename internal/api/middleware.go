@@ -25,7 +25,7 @@ func RequestIDFromContext(ctx context.Context) string {
 	return id
 }
 
-// requestIDMiddleware implementa la correlación de peticiones (Issue #11):
+// requestIDMiddleware implementa la correlación de peticiones:
 // propaga el header X-Request-ID entrante o genera un UUID v4 si llega
 // vacío, lo añade al header de la respuesta ANTES de ejecutar el siguiente
 // handler y lo inyecta en el contexto de la petición.
