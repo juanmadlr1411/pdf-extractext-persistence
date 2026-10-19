@@ -69,12 +69,7 @@ func (s *contractStore) Save(_ context.Context, doc domain.Document) (domain.Doc
 	}
 	if existingID, exists := s.checksumIdx[doc.Checksum]; exists {
 		existing := s.byID[existingID]
-		return domain.Document{}, &domain.DuplicateChecksumError{Existing: domain.PDFDocument{
-			ID:            existing.ID,
-			Filename:      existing.Filename,
-			ExtractedText: existing.ExtractedText,
-			Checksum:      existing.Checksum,
-		}}
+		return domain.Document{}, &domain.DuplicateChecksumError{Existing: existing}
 	}
 
 	s.byID[doc.ID] = doc

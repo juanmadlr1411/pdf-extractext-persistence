@@ -15,7 +15,7 @@ func TestErrNotFound_IsSentinel(t *testing.T) {
 }
 
 func TestDuplicateChecksumError_ContainsExistingDocument(t *testing.T) {
-	existing := domain.PDFDocument{
+	existing := domain.Document{
 		ID:            "64b7f8e2f9a1c2d3e4b5a677",
 		Filename:      "doc-existente.pdf",
 		ExtractedText: "texto previo",

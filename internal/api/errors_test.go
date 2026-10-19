@@ -18,7 +18,7 @@ import (
 func TestTranslateError(t *testing.T) {
 	t.Parallel()
 
-	dupErr := &domain.DuplicateChecksumError{Existing: domain.PDFDocument{ID: "abc", Checksum: "deadbeef"}}
+	dupErr := &domain.DuplicateChecksumError{Existing: domain.Document{ID: "abc", Checksum: "deadbeef"}}
 
 	cases := []struct {
 		name       string

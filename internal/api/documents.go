@@ -48,17 +48,6 @@ func toResponse(doc domain.Document) documentResponse {
 	}
 }
 
-// existingToResponse mapea el documento existente del error de checksum
-// duplicado (entidad PDFDocument de la issue #3) al contrato de salida.
-func existingToResponse(doc domain.PDFDocument) documentResponse {
-	return documentResponse{
-		ID:            doc.ID,
-		Filename:      doc.Filename,
-		ExtractedText: doc.ExtractedText,
-		Checksum:      doc.Checksum,
-	}
-}
-
 // writeJSON serializa data con el status dado.
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -86,7 +75,7 @@ func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 			var duplicate *domain.DuplicateChecksumError
 			if errors.As(err, &duplicate) {
 				status, code, message := translateError(err)
-				existing := existingToResponse(duplicate.Existing)
+				existing := toResponse(duplicate.Existing)
 				respondErrorWithDocument(w, code, message, status, &existing)
 				return
 			}

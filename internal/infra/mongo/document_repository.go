@@ -15,7 +15,6 @@ import (
 )
 
 // DocumentRepository implementa service.DocumentRepository sobre MongoDB.
-// Mínimo necesario para la issue #4: persistir el documento.
 type DocumentRepository struct {
 	client *Client
 }
@@ -25,13 +24,9 @@ func NewDocumentRepository(client *Client) *DocumentRepository {
 	return &DocumentRepository{client: client}
 }
 
-// Save inserta el documento en la colección y lo devuelve con su ID.
-//
-// Anti-TOCTOU: inserta a ciegas confiando en el índice único de checksum;
-// solo si el driver reporta clave duplicada recupera el documento conflictivo
-// y lo devuelve envuelto en *domain.DuplicateChecksumError (tipo de la
-// issue #3). Si el almacén no está disponible, el error satisface
-// errors.Is(err, service.ErrDependencyUnavailable) y la API responde 503.
+// Save inserta a ciegas y delega la exclusividad en el índice único de checksum
+// (anti-TOCTOU): solo ante clave duplicada recupera el documento conflictivo.
+// Si el almacén no está disponible, satisface service.ErrDependencyUnavailable.
 func (r *DocumentRepository) Save(ctx context.Context, doc domain.Document) (domain.Document, error) {
 	res, err := r.client.Collection().InsertOne(ctx, bson.M{
 		"filename":       doc.Filename,
@@ -59,13 +54,7 @@ func (r *DocumentRepository) conflictWithExisting(ctx context.Context, checksum 
 	if err := res.Decode(&raw); err != nil {
 		return translateMongoError(fmt.Errorf("no se pudo recuperar el documento existente: %w", err))
 	}
-	existing := documentFromBSON(raw)
-	return &domain.DuplicateChecksumError{Existing: domain.PDFDocument{
-		ID:            existing.ID,
-		Filename:      existing.Filename,
-		ExtractedText: existing.ExtractedText,
-		Checksum:      existing.Checksum,
-	}}
+	return &domain.DuplicateChecksumError{Existing: documentFromBSON(raw)}
 }
 
 // translateMongoError clasifica un error del driver: los fallos de
