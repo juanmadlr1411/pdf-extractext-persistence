@@ -6,3 +6,6 @@ README.md
 .env
 coverage.*
 /bin/
+tests/
+Makefile
+docker-compose.yml
