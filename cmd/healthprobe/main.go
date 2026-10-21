@@ -8,14 +8,18 @@ import (
 	"time"
 )
 
-func main() {
-	port := os.Getenv("PORT")
+// probeURL arma la URL de readiness con APP_PORT, igual que el servicio (config.Load).
+func probeURL() string {
+	port := os.Getenv("APP_PORT")
 	if port == "" {
-		port = ":8002"
+		port = "8002"
 	}
+	return "http://127.0.0.1:" + port + "/health/ready"
+}
 
+func main() {
 	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get("http://127.0.0.1" + port + "/health/ready")
+	resp, err := client.Get(probeURL())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "healthprobe: %v\n", err)
 		os.Exit(1)
