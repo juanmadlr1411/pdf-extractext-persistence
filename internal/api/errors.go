@@ -88,6 +88,8 @@ func translateError(err error) (status int, code string, message string) {
 		return http.StatusConflict, codeDuplicateChecksum, "ya existe un documento con el mismo checksum"
 	case errors.Is(err, service.ErrFilenameTooLong):
 		return http.StatusUnprocessableEntity, codeFilenameTooLong, "el filename supera la longitud máxima de 100 caracteres"
+	case errors.Is(err, service.ErrMissingRequiredField):
+		return http.StatusBadRequest, codeInvalidRequest, "faltan campos obligatorios del documento"
 	case errors.Is(err, service.ErrDependencyUnavailable):
 		return http.StatusServiceUnavailable, codeDependencyUnavailable, "un servicio dependiente no está disponible, inténtelo más tarde"
 	default:

@@ -19,6 +19,9 @@ var ErrDocumentNotFound = errors.New("documento no encontrado")
 // ErrFilenameTooLong indica que el filename supera MaxFilenameLength.
 var ErrFilenameTooLong = errors.New("el filename supera el máximo de 100 caracteres")
 
+// ErrMissingRequiredField indica que un campo obligatorio llegó vacío.
+var ErrMissingRequiredField = errors.New("falta un campo obligatorio")
+
 // MaxFilenameLength es el invariante de longitud del filename.
 const MaxFilenameLength = 100
 
@@ -45,8 +48,14 @@ func NewDocumentService(repo DocumentRepository) *DocumentService {
 	return &DocumentService{repo: repo}
 }
 
-// Create genera el ID del documento y delega la persistencia al repositorio.
+// Create valida invariantes y delega la persistencia al repositorio.
 func (s *DocumentService) Create(ctx context.Context, doc domain.Document) (domain.Document, error) {
+	if doc.Filename == "" || doc.Checksum == "" {
+		return domain.Document{}, ErrMissingRequiredField
+	}
+	if len(doc.Filename) > MaxFilenameLength {
+		return domain.Document{}, ErrFilenameTooLong
+	}
 	doc.ID = newID()
 	return s.repo.Save(ctx, doc)
 }

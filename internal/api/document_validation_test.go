@@ -22,11 +22,10 @@ func TestCreateDocument_ContractRejections(t *testing.T) {
 	longFilename := strings.Repeat("a", 101) + ".pdf"
 
 	tests := []struct {
-		name         string
-		body         *string // nil = cuerpo faltante
-		wantStatus   int
-		wantCode     string
-		pendingIssue bool // true = validación de invariantes postergada
+		name       string
+		body       *string // nil = cuerpo faltante
+		wantStatus int
+		wantCode   string
 	}{
 		{
 			name:       "cuerpo faltante (payload vacío)",
@@ -53,33 +52,27 @@ func TestCreateDocument_ContractRejections(t *testing.T) {
 			wantCode:   "INVALID_REQUEST",
 		},
 		{
-			name:         "falta campo obligatorio filename",
-			body:         strPtr(`{"checksum": "abc123"}`),
-			wantStatus:   http.StatusBadRequest,
-			wantCode:     "INVALID_REQUEST",
-			pendingIssue: true,
+			name:       "falta campo obligatorio filename",
+			body:       strPtr(`{"checksum": "abc123"}`),
+			wantStatus: http.StatusBadRequest,
+			wantCode:   "INVALID_REQUEST",
 		},
 		{
-			name:         "falta campo obligatorio checksum",
-			body:         strPtr(`{"filename": "informe.pdf"}`),
-			wantStatus:   http.StatusBadRequest,
-			wantCode:     "INVALID_REQUEST",
-			pendingIssue: true,
+			name:       "falta campo obligatorio checksum",
+			body:       strPtr(`{"filename": "informe.pdf"}`),
+			wantStatus: http.StatusBadRequest,
+			wantCode:   "INVALID_REQUEST",
 		},
 		{
-			name:         "filename de 101 caracteres supera el máximo",
-			body:         strPtr(`{"filename": "` + longFilename + `", "checksum": "abc123"}`),
-			wantStatus:   http.StatusUnprocessableEntity,
-			wantCode:     "FILENAME_TOO_LONG",
-			pendingIssue: true,
+			name:       "filename de 101 caracteres supera el máximo",
+			body:       strPtr(`{"filename": "` + longFilename + `", "checksum": "abc123"}`),
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   "FILENAME_TOO_LONG",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.pendingIssue {
-				t.Skip("TODO: postergado para la issue de validación de invariantes")
-			}
 			var req *http.Request
 			if tt.body == nil {
 				req = httptest.NewRequest(http.MethodPost, "/documents", nil)
