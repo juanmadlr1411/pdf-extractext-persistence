@@ -58,16 +58,16 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 // createDocumentHandler maneja POST /documents.
 func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req createDocumentRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var createReq createDocumentRequest
+		if err := json.NewDecoder(r.Body).Decode(&createReq); err != nil {
 			writeError(w, http.StatusBadRequest, codeInvalidRequest, "cuerpo de la petición inválido")
 			return
 		}
 
 		doc, err := svc.Create(r.Context(), domain.Document{
-			Filename:      req.Filename,
-			ExtractedText: req.ExtractedText,
-			Checksum:      req.Checksum,
+			Filename:      createReq.Filename,
+			ExtractedText: createReq.ExtractedText,
+			Checksum:      createReq.Checksum,
 		})
 		if err != nil {
 			// Caso estrella del contrato (C2.3): checksum duplicado responde
@@ -165,18 +165,18 @@ func patchDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 			return
 		}
 
-		var req updateFilenameRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var updateReq updateFilenameRequest
+		if err := json.NewDecoder(r.Body).Decode(&updateReq); err != nil {
 			writeError(w, http.StatusBadRequest, codeInvalidRequest, "cuerpo de la petición inválido")
 			return
 		}
 		// Un rename sin filename es una petición sin intención válida.
-		if req.Filename == nil || *req.Filename == "" {
+		if updateReq.Filename == nil || *updateReq.Filename == "" {
 			writeError(w, http.StatusBadRequest, codeInvalidRequest, "se requiere el campo 'filename'")
 			return
 		}
 
-		doc, err := svc.UpdateFilename(r.Context(), id, *req.Filename)
+		doc, err := svc.UpdateFilename(r.Context(), id, *updateReq.Filename)
 		if errors.Is(err, service.ErrFilenameTooLong) {
 			writeError(w, http.StatusUnprocessableEntity, codeFilenameTooLong, service.ErrFilenameTooLong.Error())
 			return

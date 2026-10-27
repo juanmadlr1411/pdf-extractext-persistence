@@ -25,26 +25,26 @@ func main() {
 	}
 
 	// Fail-fast: sin conexión ni índice único garantizado, el servicio no arranca.
-	db := mongo.New(cfg.MongoURI, cfg.MongoDatabase, cfg.MongoCollection)
+	mongoClient := mongo.New(cfg.MongoURI, cfg.MongoDatabase, cfg.MongoCollection)
 
 	connectCtx, connectCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer connectCancel()
-	if err := db.Connect(connectCtx); err != nil {
+	if err := mongoClient.Connect(connectCtx); err != nil {
 		slog.Error("no se pudo conectar a MongoDB", "error", err)
 		os.Exit(1)
 	}
-	if err := db.SetupIndexes(connectCtx); err != nil {
+	if err := mongoClient.SetupIndexes(connectCtx); err != nil {
 		slog.Error("no se pudieron garantizar los índices", "error", err)
-		_ = db.Disconnect(context.Background())
+		_ = mongoClient.Disconnect(context.Background())
 		os.Exit(1)
 	}
 	slog.Info("conexión a MongoDB establecida", "database", cfg.MongoDatabase, "collection", cfg.MongoCollection)
 
-	docService := service.NewDocumentService(mongo.NewDocumentRepository(db))
+	docService := service.NewDocumentService(mongo.NewDocumentRepository(mongoClient))
 
-	srv := &http.Server{
+	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.NewRouter(cfg, docService, db),
+		Handler:           api.NewRouter(cfg, docService, mongoClient),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -56,7 +56,7 @@ func main() {
 
 	go func() {
 		slog.Info("servicio iniciado", "service", cfg.AppName, "env", cfg.Environment, "port", cfg.Port)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("error al levantar el servidor", "error", err)
 			os.Exit(1)
 		}
@@ -67,11 +67,11 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("error durante el apagado", "error", err)
 		os.Exit(1)
 	}
-	if err := db.Disconnect(shutdownCtx); err != nil {
+	if err := mongoClient.Disconnect(shutdownCtx); err != nil {
 		slog.Error("error al cerrar la conexión a MongoDB", "error", err)
 		os.Exit(1)
 	}

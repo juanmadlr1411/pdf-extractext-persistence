@@ -18,20 +18,23 @@ type Database interface {
 	SetupIndexes(ctx context.Context) error
 }
 
-// Client envuelve el cliente oficial de MongoDB junto con los nombres de
+// MongoDBClient envuelve el cliente oficial de MongoDB junto con los nombres de
 // database y colección de los que el servicio es dueño.
-type Client struct {
+type MongoDBClient struct {
 	uri        string
 	client     *mongo.Client
 	database   string
 	collection string
 }
 
-var _ Database = (*Client)(nil)
+// Client mantiene compatibilidad con el tipo anterior.
+type Client = MongoDBClient
 
-// New crea un Client sin conectar aún. La conexión se establece en Connect.
-func New(uri, database, collection string) *Client {
-	return &Client{
+var _ Database = (*MongoDBClient)(nil)
+
+// New crea un MongoDBClient sin conectar aún. La conexión se establece en Connect.
+func New(uri, database, collection string) *MongoDBClient {
+	return &MongoDBClient{
 		uri:        uri,
 		database:   database,
 		collection: collection,
@@ -39,20 +42,20 @@ func New(uri, database, collection string) *Client {
 }
 
 // Connect establece la conexión con MongoDB y la verifica con un Ping.
-func (c *Client) Connect(ctx context.Context) error {
-	client, err := mongo.Connect(options.Client().ApplyURI(c.uri))
+func (c *MongoDBClient) Connect(ctx context.Context) error {
+	mongoClient, err := mongo.Connect(options.Client().ApplyURI(c.uri))
 	if err != nil {
 		return fmt.Errorf("no se pudo conectar a MongoDB: %w", err)
 	}
-	if err := client.Ping(ctx, nil); err != nil {
+	if err := mongoClient.Ping(ctx, nil); err != nil {
 		return fmt.Errorf("MongoDB no responde al ping: %w", err)
 	}
-	c.client = client
+	c.client = mongoClient
 	return nil
 }
 
 // Check implementa service.HealthChecker: hace Ping a MongoDB.
-func (c *Client) Check(ctx context.Context) error {
+func (c *MongoDBClient) Check(ctx context.Context) error {
 	if err := c.client.Ping(ctx, nil); err != nil {
 		return fmt.Errorf("MongoDB no responde al ping: %w", err)
 	}
@@ -60,7 +63,7 @@ func (c *Client) Check(ctx context.Context) error {
 }
 
 // Disconnect cierra la conexión con MongoDB.
-func (c *Client) Disconnect(ctx context.Context) error {
+func (c *MongoDBClient) Disconnect(ctx context.Context) error {
 	if err := c.client.Disconnect(ctx); err != nil {
 		return fmt.Errorf("no se pudo cerrar la conexión a MongoDB: %w", err)
 	}
@@ -68,7 +71,7 @@ func (c *Client) Disconnect(ctx context.Context) error {
 }
 
 // SetupIndexes garantiza el índice único sobre checksum (idempotente).
-func (c *Client) SetupIndexes(ctx context.Context) error {
+func (c *MongoDBClient) SetupIndexes(ctx context.Context) error {
 	model := mongo.IndexModel{
 		Keys:    bson.D{{Key: "checksum", Value: 1}},
 		Options: options.Index().SetUnique(true),
@@ -80,6 +83,6 @@ func (c *Client) SetupIndexes(ctx context.Context) error {
 }
 
 // Collection expone la colección gestionada por este cliente.
-func (c *Client) Collection() *mongo.Collection {
+func (c *MongoDBClient) Collection() *mongo.Collection {
 	return c.client.Database(c.database).Collection(c.collection)
 }

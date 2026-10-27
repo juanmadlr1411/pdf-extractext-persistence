@@ -16,11 +16,11 @@ import (
 
 // DocumentRepository implementa service.DocumentRepository sobre MongoDB.
 type DocumentRepository struct {
-	client *Client
+	client *MongoDBClient
 }
 
-// NewDocumentRepository construye el repositorio sobre un Client conectado.
-func NewDocumentRepository(client *Client) *DocumentRepository {
+// NewDocumentRepository construye el repositorio sobre un MongoDBClient conectado.
+func NewDocumentRepository(client *MongoDBClient) *DocumentRepository {
 	return &DocumentRepository{client: client}
 }
 
@@ -28,7 +28,7 @@ func NewDocumentRepository(client *Client) *DocumentRepository {
 // (anti-TOCTOU): solo ante clave duplicada recupera el documento conflictivo.
 // Si el almacén no está disponible, satisface service.ErrDependencyUnavailable.
 func (r *DocumentRepository) Save(ctx context.Context, doc domain.Document) (domain.Document, error) {
-	res, err := r.client.Collection().InsertOne(ctx, bson.M{
+	insertResult, err := r.client.Collection().InsertOne(ctx, bson.M{
 		"filename":       doc.Filename,
 		"extracted_text": doc.ExtractedText,
 		"checksum":       doc.Checksum,
@@ -39,7 +39,7 @@ func (r *DocumentRepository) Save(ctx context.Context, doc domain.Document) (dom
 		}
 		return domain.Document{}, translateMongoError(fmt.Errorf("no se pudo insertar el documento: %w", err))
 	}
-	if oid, ok := res.InsertedID.(bson.ObjectID); ok {
+	if oid, ok := insertResult.InsertedID.(bson.ObjectID); ok {
 		doc.ID = oid.Hex()
 	}
 	return doc, nil
@@ -49,12 +49,12 @@ func (r *DocumentRepository) Save(ctx context.Context, doc domain.Document) (dom
 // construir el error de duplicado con la información completa. Solo se
 // invoca en el branch de error de clave duplicada, nunca en el flujo feliz.
 func (r *DocumentRepository) conflictWithExisting(ctx context.Context, checksum string) error {
-	res := r.client.Collection().FindOne(ctx, bson.M{"checksum": checksum})
-	var raw bson.M
-	if err := res.Decode(&raw); err != nil {
+	findResult := r.client.Collection().FindOne(ctx, bson.M{"checksum": checksum})
+	var documentBSON bson.M
+	if err := findResult.Decode(&documentBSON); err != nil {
 		return translateMongoError(fmt.Errorf("no se pudo recuperar el documento existente: %w", err))
 	}
-	return &domain.DuplicateChecksumError{Existing: documentFromBSON(raw)}
+	return &domain.DuplicateChecksumError{Existing: documentFromBSON(documentBSON)}
 }
 
 // translateMongoError clasifica un error del driver: los fallos de
@@ -64,11 +64,11 @@ func (r *DocumentRepository) conflictWithExisting(ctx context.Context, checksum 
 func translateMongoError(err error) error {
 	switch {
 	case errors.Is(err, mongo.ErrClientDisconnected):
-		return dependencyDown(err)
+		return wrapAsDependencyUnavailable(err)
 	case mongo.IsTimeout(err):
-		return dependencyDown(err)
+		return wrapAsDependencyUnavailable(err)
 	case isNetworkError(err):
-		return dependencyDown(err)
+		return wrapAsDependencyUnavailable(err)
 	default:
 		return err
 	}
@@ -83,9 +83,9 @@ func isNetworkError(err error) bool {
 	return errors.As(err, &netErr)
 }
 
-// dependencyDown marca el error del driver como indisponibilidad del
+// wrapAsDependencyUnavailable marca el error del driver como indisponibilidad del
 // almacén, preservando la causa original en la cadena de errores.
-func dependencyDown(err error) error {
+func wrapAsDependencyUnavailable(err error) error {
 	return fmt.Errorf("%w: %w", service.ErrDependencyUnavailable, err)
 }
 
@@ -119,19 +119,19 @@ func (r *DocumentRepository) FindByID(ctx context.Context, id string) (domain.Do
 		return domain.Document{}, service.ErrDocumentNotFound
 	}
 
-	res := r.client.Collection().FindOne(ctx, bson.M{"_id": oid})
-	if errors.Is(res.Err(), mongo.ErrNoDocuments) {
+	findResult := r.client.Collection().FindOne(ctx, bson.M{"_id": oid})
+	if errors.Is(findResult.Err(), mongo.ErrNoDocuments) {
 		return domain.Document{}, service.ErrDocumentNotFound
 	}
-	if res.Err() != nil {
-		return domain.Document{}, fmt.Errorf("no se pudo obtener el documento: %w", res.Err())
+	if findResult.Err() != nil {
+		return domain.Document{}, fmt.Errorf("no se pudo obtener el documento: %w", findResult.Err())
 	}
 
-	var raw bson.M
-	if err := res.Decode(&raw); err != nil {
+	var documentBSON bson.M
+	if err := findResult.Decode(&documentBSON); err != nil {
 		return domain.Document{}, fmt.Errorf("no se pudo decodificar el documento: %w", err)
 	}
-	return documentFromBSON(raw), nil
+	return documentFromBSON(documentBSON), nil
 }
 
 // UpdateFilename renombra el documento y devuelve su estado actualizado,
@@ -143,19 +143,19 @@ func (r *DocumentRepository) UpdateFilename(ctx context.Context, id, filename st
 	}
 
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
-	var raw bson.M
+	var documentBSON bson.M
 	err = r.client.Collection().FindOneAndUpdate(ctx,
 		bson.M{"_id": oid},
 		bson.M{"$set": bson.M{"filename": filename}},
 		opts,
-	).Decode(&raw)
+	).Decode(&documentBSON)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return domain.Document{}, service.ErrDocumentNotFound
 	}
 	if err != nil {
 		return domain.Document{}, fmt.Errorf("no se pudo actualizar el documento: %w", err)
 	}
-	return documentFromBSON(raw), nil
+	return documentFromBSON(documentBSON), nil
 }
 
 // DeleteByID elimina el documento con el ID dado; si no existe devuelve
@@ -166,11 +166,11 @@ func (r *DocumentRepository) DeleteByID(ctx context.Context, id string) error {
 		return service.ErrDocumentNotFound
 	}
 
-	res, err := r.client.Collection().DeleteOne(ctx, bson.M{"_id": oid})
+	deleteResult, err := r.client.Collection().DeleteOne(ctx, bson.M{"_id": oid})
 	if err != nil {
 		return fmt.Errorf("no se pudo eliminar el documento: %w", err)
 	}
-	if res.DeletedCount == 0 {
+	if deleteResult.DeletedCount == 0 {
 		return service.ErrDocumentNotFound
 	}
 	return nil
@@ -178,29 +178,29 @@ func (r *DocumentRepository) DeleteByID(ctx context.Context, id string) error {
 
 // decodeDocument decodifica el documento actual del cursor al tipo de dominio.
 func decodeDocument(cursor *mongo.Cursor) (domain.Document, error) {
-	var raw bson.M
-	if err := cursor.Decode(&raw); err != nil {
+	var documentBSON bson.M
+	if err := cursor.Decode(&documentBSON); err != nil {
 		return domain.Document{}, fmt.Errorf("no se pudo decodificar el documento: %w", err)
 	}
-	return documentFromBSON(raw), nil
+	return documentFromBSON(documentBSON), nil
 }
 
 // documentFromBSON mapea un documento BSON a la entidad de dominio.
-func documentFromBSON(raw bson.M) domain.Document {
+func documentFromBSON(documentBSON bson.M) domain.Document {
 	doc := domain.Document{
-		Filename:      stringField(raw, "filename"),
-		ExtractedText: stringField(raw, "extracted_text"),
-		Checksum:      stringField(raw, "checksum"),
+		Filename:      stringField(documentBSON, "filename"),
+		ExtractedText: stringField(documentBSON, "extracted_text"),
+		Checksum:      stringField(documentBSON, "checksum"),
 	}
-	if oid, ok := raw["_id"].(bson.ObjectID); ok {
+	if oid, ok := documentBSON["_id"].(bson.ObjectID); ok {
 		doc.ID = oid.Hex()
 	}
 	return doc
 }
 
 // stringField extrae un campo string de un bson.M de forma segura.
-func stringField(raw bson.M, key string) string {
-	if v, ok := raw[key].(string); ok {
+func stringField(documentBSON bson.M, key string) string {
+	if v, ok := documentBSON[key].(string); ok {
 		return v
 	}
 	return ""

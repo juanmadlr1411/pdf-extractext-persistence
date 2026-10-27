@@ -1,6 +1,4 @@
 // Package service contiene la lógica de aplicación del Persistence Service.
-// Por ahora solo orquesta el repositorio; la validación de invariantes
-// está delegada a issues posteriores.
 package service
 
 import (
@@ -12,21 +10,15 @@ import (
 	"github.com/pdf-extractext/persistence/internal/domain"
 )
 
-// ErrDocumentNotFound es el error centinela que indica que un documento
-// no existe en el repositorio.
+
 var ErrDocumentNotFound = errors.New("documento no encontrado")
 
-// ErrFilenameTooLong indica que el filename supera MaxFilenameLength.
 var ErrFilenameTooLong = errors.New("el filename supera el máximo de 100 caracteres")
 
-// ErrMissingRequiredField indica que un campo obligatorio llegó vacío.
 var ErrMissingRequiredField = errors.New("falta un campo obligatorio")
 
-// MaxFilenameLength es el invariante de longitud del filename.
 const MaxFilenameLength = 100
 
-// ErrDependencyUnavailable indica que una dependencia (p. ej. MongoDB)
-// no está disponible. Debe traducirse a 503 DEPENDENCY_UNAVAILABLE.
 var ErrDependencyUnavailable = errors.New("dependencia no disponible")
 
 // DocumentRepository es el puerto de persistencia de documentos.
@@ -56,7 +48,7 @@ func (s *DocumentService) Create(ctx context.Context, doc domain.Document) (doma
 	if len(doc.Filename) > MaxFilenameLength {
 		return domain.Document{}, ErrFilenameTooLong
 	}
-	doc.ID = newID()
+	doc.ID = generateDocumentID()
 	return s.repo.Save(ctx, doc)
 }
 
@@ -83,9 +75,9 @@ func (s *DocumentService) Delete(ctx context.Context, id string) error {
 	return s.repo.DeleteByID(ctx, id)
 }
 
-// newID genera un ID hexadecimal de 24 caracteres (12 bytes aleatorios).
-func newID() string {
-	b := make([]byte, 12)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
+// generateDocumentID genera un ID hexadecimal de 24 caracteres (12 bytes aleatorios).
+func generateDocumentID() string {
+	randomBytes := make([]byte, 12)
+	_, _ = rand.Read(randomBytes)
+	return hex.EncodeToString(randomBytes)
 }

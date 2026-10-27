@@ -20,14 +20,14 @@ const (
 	codeDependencyUnavailable = "DEPENDENCY_UNAVAILABLE" // 503
 )
 
-// problemMeta agrupa el URN y el title de cada code del catálogo.
-type problemMeta struct {
+// problemMetadata agrupa el URN y el title de cada code del catálogo.
+type problemMetadata struct {
 	urn   string
 	title string
 }
 
 // problemCatalog mapea cada code a su (URN, title) según RFC 9457 §3.
-var problemCatalog = map[string]problemMeta{
+var problemCatalog = map[string]problemMetadata{
 	codeInvalidRequest:        {"invalid-request", "Petición inválida"},
 	codeNotFound:              {"not-found", "Recurso no encontrado"},
 	codeDuplicateChecksum:     {"duplicate-checksum", "Checksum duplicado"},

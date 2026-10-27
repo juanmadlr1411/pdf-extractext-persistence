@@ -10,8 +10,6 @@ import (
 var ErrNotFound = errors.New("documento no encontrado")
 
 // Document representa un documento persistido con su texto extraído.
-// El ID es siempre un string hexadecimal de 24 caracteres; el dominio no
-// conoce ObjectID ni detalles de MongoDB.
 type Document struct {
 	ID            string
 	Filename      string

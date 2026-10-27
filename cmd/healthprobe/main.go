@@ -18,8 +18,8 @@ func probeURL() string {
 }
 
 func main() {
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get(probeURL())
+	httpClient := &http.Client{Timeout: 3 * time.Second}
+	resp, err := httpClient.Get(probeURL())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "healthprobe: %v\n", err)
 		os.Exit(1)
