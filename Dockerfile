@@ -5,15 +5,21 @@ FROM golang:1.27-alpine AS builder
 
 WORKDIR /src
 
-# Descargar dependencias primero para aprovechar la caché de capas
+# Descargar dependencias primero para aprovechar la caché
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
 
 # Compilar servicio y healthprobe (binarios estáticos)
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/api ./cmd/api && \
-    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/healthprobe ./cmd/healthprobe
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags="-s -w" -o /app/api ./cmd/api && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags="-s -w" -o /app/healthprobe ./cmd/healthprobe
 
 # --- Stage 2: runtime mínimo ---
 FROM gcr.io/distroless/static-debian12:nonroot
