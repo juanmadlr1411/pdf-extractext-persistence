@@ -22,6 +22,24 @@ func parseObjectID(id string) (bson.ObjectID, error) {
 	return oid, nil
 }
 
+func toBSONDocument(doc domain.Document) bson.M {
+	return bson.M{
+		"filename":       doc.Filename,
+		"extracted_text": doc.ExtractedText,
+		"checksum":       doc.Checksum,
+	}
+}
+
+func extractInsertedID(res *mongo.InsertOneResult) string {
+	if res == nil {
+		return ""
+	}
+	if oid, ok := res.InsertedID.(bson.ObjectID); ok {
+		return oid.Hex()
+	}
+	return ""
+}
+
 // DocumentRepository implementa service.DocumentRepository sobre MongoDB.
 type DocumentRepository struct {
 	client *MongoDBClient
@@ -36,19 +54,15 @@ func NewDocumentRepository(client *MongoDBClient) *DocumentRepository {
 // (anti-TOCTOU): solo ante clave duplicada recupera el documento conflictivo.
 // Si el almacén no está disponible, satisface service.ErrDependencyUnavailable.
 func (r *DocumentRepository) Save(ctx context.Context, doc domain.Document) (domain.Document, error) {
-	insertResult, err := r.client.Collection().InsertOne(ctx, bson.M{
-		"filename":       doc.Filename,
-		"extracted_text": doc.ExtractedText,
-		"checksum":       doc.Checksum,
-	}, options.InsertOne())
+	insertResult, err := r.client.Collection().InsertOne(ctx, toBSONDocument(doc), options.InsertOne())
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return domain.Document{}, r.conflictWithExisting(ctx, doc.Checksum)
 		}
 		return domain.Document{}, translateMongoError(fmt.Errorf("no se pudo insertar el documento: %w", err))
 	}
-	if oid, ok := insertResult.InsertedID.(bson.ObjectID); ok {
-		doc.ID = oid.Hex()
+	if id := extractInsertedID(insertResult); id != "" {
+		doc.ID = id
 	}
 	return doc, nil
 }
