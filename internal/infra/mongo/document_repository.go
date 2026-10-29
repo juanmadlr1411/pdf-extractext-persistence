@@ -115,7 +115,7 @@ func wrapAsDependencyUnavailable(err error) error {
 func (r *DocumentRepository) FindAll(ctx context.Context) ([]domain.Document, error) {
 	cursor, err := r.client.Collection().Find(ctx, bson.M{})
 	if err != nil {
-		return nil, fmt.Errorf("no se pudieron listar los documentos: %w", err)
+		return nil, translateMongoError(fmt.Errorf("no se pudieron listar los documentos: %w", err))
 	}
 	defer func() { _ = cursor.Close(ctx) }()
 
@@ -123,12 +123,12 @@ func (r *DocumentRepository) FindAll(ctx context.Context) ([]domain.Document, er
 	for cursor.Next(ctx) {
 		doc, err := decodeDocument(cursor)
 		if err != nil {
-			return nil, err
+			return nil, translateMongoError(err)
 		}
 		docs = append(docs, doc)
 	}
 	if err := cursor.Err(); err != nil {
-		return nil, fmt.Errorf("error al iterar los documentos: %w", err)
+		return nil, translateMongoError(fmt.Errorf("error al iterar los documentos: %w", err))
 	}
 	return docs, nil
 }
@@ -146,12 +146,12 @@ func (r *DocumentRepository) FindByID(ctx context.Context, id string) (domain.Do
 		return domain.Document{}, service.ErrDocumentNotFound
 	}
 	if findResult.Err() != nil {
-		return domain.Document{}, fmt.Errorf("no se pudo obtener el documento: %w", findResult.Err())
+		return domain.Document{}, translateMongoError(fmt.Errorf("no se pudo obtener el documento: %w", findResult.Err()))
 	}
 
 	var documentBSON bson.M
 	if err := findResult.Decode(&documentBSON); err != nil {
-		return domain.Document{}, fmt.Errorf("no se pudo decodificar el documento: %w", err)
+		return domain.Document{}, translateMongoError(fmt.Errorf("no se pudo decodificar el documento: %w", err))
 	}
 	return documentFromBSON(documentBSON), nil
 }
@@ -175,7 +175,7 @@ func (r *DocumentRepository) UpdateFilename(ctx context.Context, id, filename st
 		return domain.Document{}, service.ErrDocumentNotFound
 	}
 	if err != nil {
-		return domain.Document{}, fmt.Errorf("no se pudo actualizar el documento: %w", err)
+		return domain.Document{}, translateMongoError(fmt.Errorf("no se pudo actualizar el documento: %w", err))
 	}
 	return documentFromBSON(documentBSON), nil
 }
@@ -190,7 +190,7 @@ func (r *DocumentRepository) DeleteByID(ctx context.Context, id string) error {
 
 	deleteResult, err := r.client.Collection().DeleteOne(ctx, bson.M{"_id": oid})
 	if err != nil {
-		return fmt.Errorf("no se pudo eliminar el documento: %w", err)
+		return translateMongoError(fmt.Errorf("no se pudo eliminar el documento: %w", err))
 	}
 	if deleteResult.DeletedCount == 0 {
 		return service.ErrDocumentNotFound

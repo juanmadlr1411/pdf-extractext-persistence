@@ -104,6 +104,10 @@ func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 func listDocumentsHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		docs, err := svc.List(r.Context())
+		if errors.Is(err, service.ErrDependencyUnavailable) {
+			respondError(w, codeDependencyUnavailable, "un servicio dependiente no está disponible, inténtelo más tarde", http.StatusServiceUnavailable)
+			return
+		}
 		if err != nil {
 			respondError(w, codeInternalError, "no se pudieron listar los documentos", http.StatusInternalServerError)
 			return
@@ -132,6 +136,10 @@ func getDocumentByIDHandler(svc *service.DocumentService) http.HandlerFunc {
 			respondError(w, codeNotFound, "documento no encontrado", http.StatusNotFound)
 			return
 		}
+		if errors.Is(err, service.ErrDependencyUnavailable) {
+			respondError(w, codeDependencyUnavailable, "un servicio dependiente no está disponible, inténtelo más tarde", http.StatusServiceUnavailable)
+			return
+		}
 		if err != nil {
 			respondError(w, codeInternalError, "no se pudo obtener el documento", http.StatusInternalServerError)
 			return
@@ -152,6 +160,9 @@ func deleteDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 
 		if err := svc.Delete(r.Context(), id); errors.Is(err, service.ErrDocumentNotFound) {
 			respondError(w, codeNotFound, "documento no encontrado", http.StatusNotFound)
+			return
+		} else if errors.Is(err, service.ErrDependencyUnavailable) {
+			respondError(w, codeDependencyUnavailable, "un servicio dependiente no está disponible, inténtelo más tarde", http.StatusServiceUnavailable)
 			return
 		} else if err != nil {
 			respondError(w, codeInternalError, "no se pudo eliminar el documento", http.StatusInternalServerError)
@@ -188,6 +199,10 @@ func patchDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 		}
 		if errors.Is(err, service.ErrDocumentNotFound) {
 			respondError(w, codeNotFound, "documento no encontrado", http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrDependencyUnavailable) {
+			respondError(w, codeDependencyUnavailable, "un servicio dependiente no está disponible, inténtelo más tarde", http.StatusServiceUnavailable)
 			return
 		}
 		if err != nil {

@@ -26,6 +26,11 @@ type fakeDocumentRepository struct {
 	findCalls   int // cuenta FindAll + FindByID
 	updateCalls int
 	deleteCalls int
+	saveErr     error
+	listErr     error
+	getByIDErr  error
+	updateErr   error
+	deleteErr   error
 }
 
 func newFakeDocumentRepository() *fakeDocumentRepository {
@@ -34,6 +39,9 @@ func newFakeDocumentRepository() *fakeDocumentRepository {
 
 func (f *fakeDocumentRepository) Save(_ context.Context, doc domain.Document) (domain.Document, error) {
 	f.saveCalls++
+	if f.saveErr != nil {
+		return domain.Document{}, f.saveErr
+	}
 	if doc.ID == "" {
 		b := make([]byte, 12)
 		_, _ = rand.Read(b)
@@ -46,11 +54,17 @@ func (f *fakeDocumentRepository) Save(_ context.Context, doc domain.Document) (d
 
 func (f *fakeDocumentRepository) FindAll(_ context.Context) ([]domain.Document, error) {
 	f.findCalls++
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	return f.docs, nil
 }
 
 func (f *fakeDocumentRepository) FindByID(_ context.Context, id string) (domain.Document, error) {
 	f.findCalls++
+	if f.getByIDErr != nil {
+		return domain.Document{}, f.getByIDErr
+	}
 	doc, ok := f.byID[id]
 	if !ok {
 		return domain.Document{}, service.ErrDocumentNotFound
@@ -60,6 +74,9 @@ func (f *fakeDocumentRepository) FindByID(_ context.Context, id string) (domain.
 
 func (f *fakeDocumentRepository) UpdateFilename(_ context.Context, id, filename string) (domain.Document, error) {
 	f.updateCalls++
+	if f.updateErr != nil {
+		return domain.Document{}, f.updateErr
+	}
 	doc, ok := f.byID[id]
 	if !ok {
 		return domain.Document{}, service.ErrDocumentNotFound
@@ -76,6 +93,9 @@ func (f *fakeDocumentRepository) UpdateFilename(_ context.Context, id, filename 
 
 func (f *fakeDocumentRepository) DeleteByID(_ context.Context, id string) error {
 	f.deleteCalls++
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
 	if _, ok := f.byID[id]; !ok {
 		return service.ErrDocumentNotFound
 	}
@@ -324,5 +344,82 @@ func TestGetDocumentByID_Found_Returns200WithDocument(t *testing.T) {
 
 	if repo.findCalls != 1 {
 		t.Errorf("esperada 1 llamada al repositorio, obtenidas %d", repo.findCalls)
+	}
+}
+
+func TestListDocuments_DependencyUnavailable_Returns503_API(t *testing.T) {
+	t.Parallel()
+	repo := newFakeDocumentRepository()
+	repo.listErr = service.ErrDependencyUnavailable
+	router := NewRouter(config.Config{AppName: "pdf-extractext-persistence", Environment: "test"}, service.NewDocumentService(repo), &fakeHealthChecker{healthy: true})
+
+	req := httptest.NewRequest(http.MethodGet, "/documents", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("esperado 503, obtenido %d: %s", rec.Code, rec.Body.String())
+	}
+	body := decodeBody(t, rec)
+	if body["code"] != "DEPENDENCY_UNAVAILABLE" {
+		t.Errorf("code esperado DEPENDENCY_UNAVAILABLE, obtenido %v", body["code"])
+	}
+}
+
+func TestGetDocument_DependencyUnavailable_Returns503_API(t *testing.T) {
+	t.Parallel()
+	repo := newFakeDocumentRepository()
+	repo.getByIDErr = service.ErrDependencyUnavailable
+	router := NewRouter(config.Config{AppName: "pdf-extractext-persistence", Environment: "test"}, service.NewDocumentService(repo), &fakeHealthChecker{healthy: true})
+
+	req := httptest.NewRequest(http.MethodGet, "/documents/507f1f77bcf86cd799439011", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("esperado 503, obtenido %d: %s", rec.Code, rec.Body.String())
+	}
+	body := decodeBody(t, rec)
+	if body["code"] != "DEPENDENCY_UNAVAILABLE" {
+		t.Errorf("code esperado DEPENDENCY_UNAVAILABLE, obtenido %v", body["code"])
+	}
+}
+
+func TestPatchDocument_DependencyUnavailable_Returns503_API(t *testing.T) {
+	t.Parallel()
+	repo := newFakeDocumentRepository()
+	repo.updateErr = service.ErrDependencyUnavailable
+	router := NewRouter(config.Config{AppName: "pdf-extractext-persistence", Environment: "test"}, service.NewDocumentService(repo), &fakeHealthChecker{healthy: true})
+
+	req := httptest.NewRequest(http.MethodPatch, "/documents/507f1f77bcf86cd799439011", bytes.NewBufferString(`{"filename":"nuevo.pdf"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("esperado 503, obtenido %d: %s", rec.Code, rec.Body.String())
+	}
+	body := decodeBody(t, rec)
+	if body["code"] != "DEPENDENCY_UNAVAILABLE" {
+		t.Errorf("code esperado DEPENDENCY_UNAVAILABLE, obtenido %v", body["code"])
+	}
+}
+
+func TestDeleteDocument_DependencyUnavailable_Returns503_API(t *testing.T) {
+	t.Parallel()
+	repo := newFakeDocumentRepository()
+	repo.deleteErr = service.ErrDependencyUnavailable
+	router := NewRouter(config.Config{AppName: "pdf-extractext-persistence", Environment: "test"}, service.NewDocumentService(repo), &fakeHealthChecker{healthy: true})
+
+	req := httptest.NewRequest(http.MethodDelete, "/documents/507f1f77bcf86cd799439011", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("esperado 503, obtenido %d: %s", rec.Code, rec.Body.String())
+	}
+	body := decodeBody(t, rec)
+	if body["code"] != "DEPENDENCY_UNAVAILABLE" {
+		t.Errorf("code esperado DEPENDENCY_UNAVAILABLE, obtenido %v", body["code"])
 	}
 }
