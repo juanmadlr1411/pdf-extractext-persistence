@@ -3,8 +3,6 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 
 	"github.com/pdf-extractext/persistence/internal/domain"
@@ -41,6 +39,7 @@ func NewDocumentService(repo DocumentRepository) *DocumentService {
 }
 
 // Create valida invariantes y delega la persistencia al repositorio.
+// El identificador es asignado por la capa de persistencia (MongoDB).
 func (s *DocumentService) Create(ctx context.Context, doc domain.Document) (domain.Document, error) {
 	if doc.Filename == "" || doc.Checksum == "" {
 		return domain.Document{}, ErrMissingRequiredField
@@ -48,7 +47,6 @@ func (s *DocumentService) Create(ctx context.Context, doc domain.Document) (doma
 	if len(doc.Filename) > MaxFilenameLength {
 		return domain.Document{}, ErrFilenameTooLong
 	}
-	doc.ID = generateDocumentID()
 	return s.repo.Save(ctx, doc)
 }
 
@@ -62,8 +60,11 @@ func (s *DocumentService) GetByID(ctx context.Context, id string) (domain.Docume
 	return s.repo.FindByID(ctx, id)
 }
 
-// UpdateFilename renombra el documento revalidando el invariante de longitud.
+// UpdateFilename renombra el documento revalidando los invariantes.
 func (s *DocumentService) UpdateFilename(ctx context.Context, id, filename string) (domain.Document, error) {
+	if filename == "" {
+		return domain.Document{}, ErrMissingRequiredField
+	}
 	if len(filename) > MaxFilenameLength {
 		return domain.Document{}, ErrFilenameTooLong
 	}
@@ -73,11 +74,4 @@ func (s *DocumentService) UpdateFilename(ctx context.Context, id, filename strin
 // Delete elimina el documento con el ID dado o devuelve ErrDocumentNotFound.
 func (s *DocumentService) Delete(ctx context.Context, id string) error {
 	return s.repo.DeleteByID(ctx, id)
-}
-
-// generateDocumentID genera un ID hexadecimal de 24 caracteres (12 bytes aleatorios).
-func generateDocumentID() string {
-	randomBytes := make([]byte, 12)
-	_, _ = rand.Read(randomBytes)
-	return hex.EncodeToString(randomBytes)
 }

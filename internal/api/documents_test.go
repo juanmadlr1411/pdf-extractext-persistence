@@ -3,6 +3,8 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -32,6 +34,11 @@ func newFakeDocumentRepository() *fakeDocumentRepository {
 
 func (f *fakeDocumentRepository) Save(_ context.Context, doc domain.Document) (domain.Document, error) {
 	f.saveCalls++
+	if doc.ID == "" {
+		b := make([]byte, 12)
+		_, _ = rand.Read(b)
+		doc.ID = hex.EncodeToString(b)
+	}
 	f.docs = append(f.docs, doc)
 	f.byID[doc.ID] = doc
 	return doc, nil
