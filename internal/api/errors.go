@@ -70,11 +70,7 @@ func respondErrorWithDocument(w http.ResponseWriter, code, detail string, status
 	_ = json.NewEncoder(w).Encode(problem)
 }
 
-// writeError se mantiene por compatibilidad con handlers existentes.
-// Deprecated: usar respondError.
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	respondError(w, code, message, status)
-}
+
 
 // translateError mapea errores de dominio/servicio a la dupla contractual
 // (status, code) más un mensaje seguro para el cliente. Cualquier error no
@@ -82,7 +78,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 func translateError(err error) (status int, code string, message string) {
 	var dupErr *domain.DuplicateChecksumError
 	switch {
-	case errors.Is(err, domain.ErrNotFound):
+	case errors.Is(err, service.ErrDocumentNotFound):
 		return http.StatusNotFound, codeNotFound, "el recurso solicitado no existe"
 	case errors.As(err, &dupErr):
 		return http.StatusConflict, codeDuplicateChecksum, "ya existe un documento con el mismo checksum"

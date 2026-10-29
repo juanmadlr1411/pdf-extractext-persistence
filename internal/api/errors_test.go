@@ -26,8 +26,8 @@ func TestTranslateError(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{"not found", domain.ErrNotFound, http.StatusNotFound, "NOT_FOUND"},
-		{"not found wrapped", fmt.Errorf("repo: %w", domain.ErrNotFound), http.StatusNotFound, "NOT_FOUND"},
+		{"not found", service.ErrDocumentNotFound, http.StatusNotFound, "NOT_FOUND"},
+		{"not found wrapped", fmt.Errorf("repo: %w", service.ErrDocumentNotFound), http.StatusNotFound, "NOT_FOUND"},
 		{"duplicate checksum", dupErr, http.StatusConflict, "DUPLICATE_CHECKSUM"},
 		{"duplicate checksum wrapped", fmt.Errorf("service: %w", dupErr), http.StatusConflict, "DUPLICATE_CHECKSUM"},
 		{"filename too long", service.ErrFilenameTooLong, http.StatusUnprocessableEntity, "FILENAME_TOO_LONG"},

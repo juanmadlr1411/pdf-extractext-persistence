@@ -35,7 +35,7 @@ func readinessHandler(checker service.HealthChecker) http.HandlerFunc {
 		defer cancel()
 
 		if err := checker.Check(ctx); err != nil {
-			writeError(w, http.StatusServiceUnavailable, codeDependencyUnavailable, "dependencia no disponible")
+			respondError(w, codeDependencyUnavailable, "dependencia no disponible", http.StatusServiceUnavailable)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

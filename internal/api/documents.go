@@ -15,6 +15,15 @@ import (
 // objectIDRegex valida el formato de un ObjectId de Mongo (24 hex minúsculas).
 var objectIDRegex = regexp.MustCompile(`^[0-9a-f]{24}$`)
 
+func extractValidObjectID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := chi.URLParam(r, "id")
+	if !objectIDRegex.MatchString(id) {
+		respondError(w, codeInvalidRequest, "el id debe ser un hexadecimal de 24 caracteres", http.StatusBadRequest)
+		return "", false
+	}
+	return id, true
+}
+
 // createDocumentRequest es el payload de entrada del endpoint POST /documents.
 // La deserialización es estricta: solo se aceptan estos campos.
 type createDocumentRequest struct {
@@ -60,7 +69,7 @@ func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var createReq createDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&createReq); err != nil {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, "cuerpo de la petición inválido")
+			respondError(w, codeInvalidRequest, "cuerpo de la petición inválido", http.StatusBadRequest)
 			return
 		}
 
@@ -96,7 +105,7 @@ func listDocumentsHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		docs, err := svc.List(r.Context())
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudieron listar los documentos")
+			respondError(w, codeInternalError, "no se pudieron listar los documentos", http.StatusInternalServerError)
 			return
 		}
 
@@ -113,20 +122,18 @@ func listDocumentsHandler(svc *service.DocumentService) http.HandlerFunc {
 // Valida el formato del ID de forma fail-fast antes de tocar el servicio.
 func getDocumentByIDHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-
-		if !objectIDRegex.MatchString(id) {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, "el id debe ser un hexadecimal de 24 caracteres")
+		id, ok := extractValidObjectID(w, r)
+		if !ok {
 			return
 		}
 
 		doc, err := svc.GetByID(r.Context(), id)
 		if errors.Is(err, service.ErrDocumentNotFound) {
-			writeError(w, http.StatusNotFound, codeNotFound, "documento no encontrado")
+			respondError(w, codeNotFound, "documento no encontrado", http.StatusNotFound)
 			return
 		}
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudo obtener el documento")
+			respondError(w, codeInternalError, "no se pudo obtener el documento", http.StatusInternalServerError)
 			return
 		}
 
@@ -138,17 +145,16 @@ func getDocumentByIDHandler(svc *service.DocumentService) http.HandlerFunc {
 // 404 si ya no existe (idempotencia por ausencia).
 func deleteDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		if !objectIDRegex.MatchString(id) {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, "el id debe ser un hexadecimal de 24 caracteres")
+		id, ok := extractValidObjectID(w, r)
+		if !ok {
 			return
 		}
 
 		if err := svc.Delete(r.Context(), id); errors.Is(err, service.ErrDocumentNotFound) {
-			writeError(w, http.StatusNotFound, codeNotFound, "documento no encontrado")
+			respondError(w, codeNotFound, "documento no encontrado", http.StatusNotFound)
 			return
 		} else if err != nil {
-			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudo eliminar el documento")
+			respondError(w, codeInternalError, "no se pudo eliminar el documento", http.StatusInternalServerError)
 			return
 		}
 
@@ -159,34 +165,33 @@ func deleteDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 // patchDocumentHandler maneja PATCH /documents/{id}: solo filename es mutable.
 func patchDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		if !objectIDRegex.MatchString(id) {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, "el id debe ser un hexadecimal de 24 caracteres")
+		id, ok := extractValidObjectID(w, r)
+		if !ok {
 			return
 		}
 
 		var updateReq updateFilenameRequest
 		if err := json.NewDecoder(r.Body).Decode(&updateReq); err != nil {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, "cuerpo de la petición inválido")
+			respondError(w, codeInvalidRequest, "cuerpo de la petición inválido", http.StatusBadRequest)
 			return
 		}
 		// Un rename sin filename es una petición sin intención válida.
 		if updateReq.Filename == nil || *updateReq.Filename == "" {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, "se requiere el campo 'filename'")
+			respondError(w, codeInvalidRequest, "se requiere el campo 'filename'", http.StatusBadRequest)
 			return
 		}
 
 		doc, err := svc.UpdateFilename(r.Context(), id, *updateReq.Filename)
 		if errors.Is(err, service.ErrFilenameTooLong) {
-			writeError(w, http.StatusUnprocessableEntity, codeFilenameTooLong, service.ErrFilenameTooLong.Error())
+			respondError(w, codeFilenameTooLong, service.ErrFilenameTooLong.Error(), http.StatusUnprocessableEntity)
 			return
 		}
 		if errors.Is(err, service.ErrDocumentNotFound) {
-			writeError(w, http.StatusNotFound, codeNotFound, "documento no encontrado")
+			respondError(w, codeNotFound, "documento no encontrado", http.StatusNotFound)
 			return
 		}
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, codeInternalError, "no se pudo actualizar el documento")
+			respondError(w, codeInternalError, "no se pudo actualizar el documento", http.StatusInternalServerError)
 			return
 		}
 

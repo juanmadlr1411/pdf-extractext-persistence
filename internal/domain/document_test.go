@@ -7,10 +7,10 @@ import (
 	"github.com/pdf-extractext/persistence/internal/domain"
 )
 
-func TestErrNotFound_IsSentinel(t *testing.T) {
-	wrapped := errors.Join(errors.New("capa repositorio"), domain.ErrNotFound)
-	if !errors.Is(wrapped, domain.ErrNotFound) {
-		t.Error("ErrNotFound debe ser detectable con errors.Is aunque esté envuelto")
+func TestDocument_ZeroValue(t *testing.T) {
+	var d domain.Document
+	if d.ID != "" || d.Filename != "" || d.ExtractedText != "" || d.Checksum != "" {
+		t.Fatalf("se esperaba zero value vacío, obtenido %+v", d)
 	}
 }
 
