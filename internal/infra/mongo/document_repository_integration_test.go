@@ -246,3 +246,94 @@ func TestDocumentRepository_Save_MongoCaidoDevuelveIndisponibilidad(t *testing.T
 		t.Fatalf("esperaba ErrDependencyUnavailable con Mongo caído, obtuve %v", err)
 	}
 }
+
+// TestDocumentRepository_UpdateFilename_ActualizaSoloFilenameConservandoCampos verifica
+// que UpdateFilename actualiza únicamente el filename y conserva ID, extracted_text y checksum.
+func TestDocumentRepository_UpdateFilename_ActualizaSoloFilenameConservandoCampos(t *testing.T) {
+	repo := newConnectedRepo(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	saved, err := repo.Save(ctx, domain.Document{
+		Filename:      "original.pdf",
+		ExtractedText: "texto original",
+		Checksum:      "sha256:update-ok",
+	})
+	if err != nil {
+		t.Fatalf("Save falló: %v", err)
+	}
+
+	updated, err := repo.UpdateFilename(ctx, saved.ID, "renombrado.pdf")
+	if err != nil {
+		t.Fatalf("UpdateFilename falló: %v", err)
+	}
+	if updated.ID != saved.ID {
+		t.Errorf("ID debe conservarse: got %q want %q", updated.ID, saved.ID)
+	}
+	if updated.Filename != "renombrado.pdf" {
+		t.Errorf("filename esperado %q, obtenido %q", "renombrado.pdf", updated.Filename)
+	}
+	if updated.ExtractedText != saved.ExtractedText {
+		t.Errorf("extracted_text debe conservarse: got %q want %q", updated.ExtractedText, saved.ExtractedText)
+	}
+	if updated.Checksum != saved.Checksum {
+		t.Errorf("checksum debe conservarse: got %q want %q", updated.Checksum, saved.Checksum)
+	}
+
+	got, err := repo.FindByID(ctx, saved.ID)
+	if err != nil {
+		t.Fatalf("FindByID tras UpdateFilename falló: %v", err)
+	}
+	if got.Filename != "renombrado.pdf" {
+		t.Errorf("tras actualización persistida, filename esperado %q, obtenido %q", "renombrado.pdf", got.Filename)
+	}
+	if got.ExtractedText != saved.ExtractedText || got.Checksum != saved.Checksum {
+		t.Errorf("tras actualización persistida, campos deben conservarse: got %+v", got)
+	}
+}
+
+// TestDocumentRepository_UpdateFilename_NotFoundDevuelveErrDocumentNotFound verifica
+// que con un ID válido pero inexistente devuelve service.ErrDocumentNotFound.
+func TestDocumentRepository_UpdateFilename_NotFoundDevuelveErrDocumentNotFound(t *testing.T) {
+	repo := newConnectedRepo(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := repo.UpdateFilename(ctx, "507f1f77bcf86cd7994390ff", "nuevo.pdf")
+	if err != service.ErrDocumentNotFound {
+		t.Fatalf("esperado ErrDocumentNotFound, obtenido: %v", err)
+	}
+}
+
+// TestDocumentRepository_DeleteByID_ExitoEIdempotenciaPorAusencia verifica
+// eliminación exitosa, desaparición del documento y idempotencia por ausencia (404-like).
+func TestDocumentRepository_DeleteByID_ExitoEIdempotenciaPorAusencia(t *testing.T) {
+	repo := newConnectedRepo(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	saved, err := repo.Save(ctx, domain.Document{
+		Filename:      "a-eliminar.pdf",
+		ExtractedText: "texto",
+		Checksum:      "sha256:delete-ok",
+	})
+	if err != nil {
+		t.Fatalf("Save falló: %v", err)
+	}
+
+	if err := repo.DeleteByID(ctx, saved.ID); err != nil {
+		t.Fatalf("DeleteByID primera llamada falló: %v", err)
+	}
+
+	if _, err := repo.FindByID(ctx, saved.ID); err != service.ErrDocumentNotFound {
+		t.Fatalf("tras eliminar, FindByID debería devolver ErrDocumentNotFound, obtenido: %v", err)
+	}
+
+	if err := repo.DeleteByID(ctx, saved.ID); err != service.ErrDocumentNotFound {
+		t.Fatalf("segunda llamada a DeleteByID debería devolver ErrDocumentNotFound, obtenido: %v", err)
+	}
+}
+
