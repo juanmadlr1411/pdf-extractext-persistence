@@ -14,6 +14,14 @@ import (
 	"github.com/pdf-extractext/persistence/internal/service"
 )
 
+func parseObjectID(id string) (bson.ObjectID, error) {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return bson.NilObjectID, service.ErrDocumentNotFound
+	}
+	return oid, nil
+}
+
 // DocumentRepository implementa service.DocumentRepository sobre MongoDB.
 type DocumentRepository struct {
 	client *MongoDBClient
@@ -114,9 +122,9 @@ func (r *DocumentRepository) FindAll(ctx context.Context) ([]domain.Document, er
 // FindByID devuelve el documento con el ObjectId dado o ErrDocumentNotFound.
 // El ID debe tener formato válido; el handler lo garantiza antes de llamar.
 func (r *DocumentRepository) FindByID(ctx context.Context, id string) (domain.Document, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
-		return domain.Document{}, service.ErrDocumentNotFound
+		return domain.Document{}, err
 	}
 
 	findResult := r.client.Collection().FindOne(ctx, bson.M{"_id": oid})
@@ -137,9 +145,9 @@ func (r *DocumentRepository) FindByID(ctx context.Context, id string) (domain.Do
 // UpdateFilename renombra el documento y devuelve su estado actualizado,
 // o ErrDocumentNotFound si el ID no existe.
 func (r *DocumentRepository) UpdateFilename(ctx context.Context, id, filename string) (domain.Document, error) {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
-		return domain.Document{}, service.ErrDocumentNotFound
+		return domain.Document{}, err
 	}
 
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
@@ -161,9 +169,9 @@ func (r *DocumentRepository) UpdateFilename(ctx context.Context, id, filename st
 // DeleteByID elimina el documento con el ID dado; si no existe devuelve
 // ErrDocumentNotFound (detectado via DeletedCount).
 func (r *DocumentRepository) DeleteByID(ctx context.Context, id string) error {
-	oid, err := bson.ObjectIDFromHex(id)
+	oid, err := parseObjectID(id)
 	if err != nil {
-		return service.ErrDocumentNotFound
+		return err
 	}
 
 	deleteResult, err := r.client.Collection().DeleteOne(ctx, bson.M{"_id": oid})
