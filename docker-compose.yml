@@ -14,5 +14,6 @@ services:
       - APP_ENV=local
       - APP_PORT=8002
       - MONGO_URI=mongodb://mongo:27017
+      - CONSUL_ENABLED=false
     depends_on:
       - mongo

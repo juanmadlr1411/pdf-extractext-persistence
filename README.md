@@ -21,6 +21,55 @@ Variables de entorno:
 | `MONGO_URI`             | URI de conexión a MongoDB    | *(obligatoria)*              |
 | `MONGO_DATABASE_NAME`   | Database de MongoDB          | `pdf_extractext`             |
 | `MONGO_COLLECTION_NAME` | Colección de documentos      | `pdf_documents`              |
+| `CONSUL_ENABLED`        | Habilita registro y KV       | `false`                      |
+| `CONSUL_HTTP_ADDR`      | Dirección HTTP de Consul     | `consul:8500`                |
+| `CONSUL_HTTP_TOKEN`     | Token ACL de Consul          | *(vacío)*                    |
+| `SERVICE_NAME`          | Nombre del servicio          | `persistence`                |
+| `SERVICE_PORT`          | Puerto anunciado             | `APP_PORT` (`8002`)          |
+| `SERVICE_HEALTH_PATH`   | Check de readiness           | `/health/ready`              |
+
+Copiá `.env.example` a `.env` para desarrollo local. El compose local usa
+`CONSUL_ENABLED=false`, por lo que sigue funcionando sin Consul.
+
+### Integración con Consul y Traefik
+
+Con `CONSUL_ENABLED=true` el arranque es:
+
+1. Lee `GET /v1/kv/pdf-extractext/config/persistence/?recurse` **antes** de
+   conectar a MongoDB. `MONGO_DATABASE_NAME` y `MONGO_COLLECTION_NAME` respetan
+   la precedencia **env > KV > default**. `MONGO_URI` solo se acepta por
+   variable de entorno. Si el KV no responde, se usan env/defaults y se emite
+   un warning.
+2. Resuelve la IP del servicio con `net.Dial("udp", consul:8500)`. Persistence
+   está conectado a la red `services` y a la red `data`; el dial a Consul
+   garantiza anunciar la IP de la red `services` (alcanzable por Traefik y
+   Consul), no la de `data`.
+3. Registra el ID `persistence-<hostname>` con tags y meta espejo de Traefik:
+
+   ```text
+   traefik.enable=true
+   traefik.http.routers.persistence.rule=Host(`persistence.pdf-extractext.localhost`)
+   traefik.http.routers.persistence.entrypoints=internal
+   traefik.http.services.persistence.loadbalancer.server.port=8002
+   ```
+
+   El check HTTP apunta a `http://<address>:8002/health/ready` (incluye el
+   ping a MongoDB), con intervalo `10s`, timeout `2s` y
+   `DeregisterCriticalServiceAfter=1m`.
+4. Todas las llamadas a Consul (`register`, `deregister`, `health` y `kv`)
+   envían el header `X-Consul-Token`.
+5. Si Consul está caído, el servicio arranca igual y reintenta el registro con
+   backoff exponencial.
+6. Ante `SIGTERM`/`SIGINT` ejecuta: deregister en Consul → espera 5 s para que
+   Traefik deje de enviar tráfico → `srv.Shutdown` → `db.Disconnect`.
+
+Para verificar el registro desde la red interna:
+
+```bash
+docker exec pdf-extractext-consul-1 wget -qO- \
+  --header="X-Consul-Token: $CONSUL_HTTP_TOKEN" \
+  http://127.0.0.1:8500/v1/health/service/persistence
+```
 
 ## API
 
@@ -120,7 +169,8 @@ cmd/
 ├── api/            # Entrypoint: config + Mongo lifecycle + servidor HTTP + graceful shutdown
 └── healthprobe/    # Probe para la imagen distroless
 internal/
-├── config/         # Configuración vía variables de entorno
+├── config/         # Configuración vía variables de entorno (+ KV de Consul)
+├── consul/         # Cliente HTTP, registro, KV y secuencia de apagado
 ├── api/            # Router (chi), handlers y middlewares (X-Request-ID, panic recovery)
 ├── domain/         # Entidades (Document, PDFDocument) y errores de dominio
 ├── service/        # Lógica de aplicación (DocumentService, health)
