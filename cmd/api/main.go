@@ -13,8 +13,14 @@ import (
 
 	"github.com/pdf-extractext/persistence/internal/api"
 	"github.com/pdf-extractext/persistence/internal/config"
+	"github.com/pdf-extractext/persistence/internal/consul"
 	"github.com/pdf-extractext/persistence/internal/infra/mongo"
 	"github.com/pdf-extractext/persistence/internal/service"
+)
+
+var (
+	version = "dev"
+	commit  = "unknown"
 )
 
 func main() {
@@ -62,17 +68,55 @@ func main() {
 		}
 	}()
 
+	var consulClient *consul.Client
+	var serviceID string
+	if cfg.ConsulEnabled {
+		consulClient = consul.NewClient(cfg.ConsulHTTPAddr, cfg.ConsulHTTPToken)
+
+		hostname, err := os.Hostname()
+		if err != nil {
+			slog.Warn("no se pudo obtener el hostname; se omite el registro en Consul", "error", err)
+		} else if address, err := consul.ServiceIP(cfg.ConsulHTTPAddr); err != nil {
+			slog.Warn("no se pudo resolver la IP de la red services; se omite el registro en Consul", "error", err)
+		} else {
+			serviceID = consul.ServiceID(cfg.ServiceName, hostname)
+			registration := consul.BuildRegistration(consul.RegistrationInput{
+				ServiceID:   serviceID,
+				ServiceName: cfg.ServiceName,
+				Address:     address,
+				Port:        cfg.ServicePort,
+				HealthPath:  cfg.ServiceHealthPath,
+				Version:     version,
+				Commit:      commit,
+			})
+			go consul.RegisterWithRetry(ctx, consulClient, registration)
+		}
+	}
+
 	<-ctx.Done()
 	slog.Info("apagando el servidor...")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		slog.Error("error durante el apagado", "error", err)
-		os.Exit(1)
+
+	deregister := func(context.Context) error { return nil }
+	if consulClient != nil && serviceID != "" {
+		deregister = func(shutdownCtx context.Context) error {
+			if err := consulClient.Deregister(shutdownCtx, serviceID); err != nil {
+				return err
+			}
+			slog.Info("servicio deregistrado de Consul", "id", serviceID)
+			return nil
+		}
 	}
-	if err := mongoClient.Disconnect(shutdownCtx); err != nil {
-		slog.Error("error al cerrar la conexión a MongoDB", "error", err)
+
+	if err := consul.GracefulShutdown(shutdownCtx, consul.DefaultDrainDelay, consul.ShutdownHooks{
+		Deregister: deregister,
+		Wait:       time.Sleep,
+		Shutdown:   httpServer.Shutdown,
+		Disconnect: mongoClient.Disconnect,
+	}); err != nil {
+		slog.Error("error durante el apagado", "error", err)
 		os.Exit(1)
 	}
 	slog.Info("servidor detenido correctamente")
