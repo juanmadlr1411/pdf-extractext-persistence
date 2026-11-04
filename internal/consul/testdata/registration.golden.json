@@ -1,0 +1,26 @@
+{
+  "ID": "persistence-host-1",
+  "Name": "persistence",
+  "Address": "10.0.1.23",
+  "Port": 8002,
+  "Tags": [
+    "traefik.enable=true",
+    "traefik.http.routers.persistence.rule=Host(`persistence.pdf-extractext.localhost`)",
+    "traefik.http.routers.persistence.entrypoints=internal",
+    "traefik.http.services.persistence.loadbalancer.server.port=8002"
+  ],
+  "Meta": {
+    "commit": "abc123",
+    "traefik.enable": "true",
+    "traefik.http.routers.persistence.entrypoints": "internal",
+    "traefik.http.routers.persistence.rule": "Host(`persistence.pdf-extractext.localhost`)",
+    "traefik.http.services.persistence.loadbalancer.server.port": "8002",
+    "version": "1.0.0"
+  },
+  "Check": {
+    "HTTP": "http://10.0.1.23:8002/health/ready",
+    "Interval": "10s",
+    "Timeout": "2s",
+    "DeregisterCriticalServiceAfter": "1m"
+  }
+}
