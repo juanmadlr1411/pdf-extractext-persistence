@@ -3,7 +3,9 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"strconv"
 )
 
 // Config contiene la configuración del servicio leída de variables de entorno.
@@ -14,6 +16,16 @@ type Config struct {
 	MongoURI        string
 	MongoDatabase   string
 	MongoCollection string
+
+	ConsulHTTPAddr    string
+	ConsulHTTPToken   string
+	ConsulEnabled     bool
+	ServiceName       string
+	ServicePort       int
+	ServiceHealthPath string
+
+	mongoDatabaseFromEnv   bool
+	mongoCollectionFromEnv bool
 }
 
 // Load lee la configuración desde las variables de entorno, aplicando valores
@@ -25,19 +37,67 @@ func Load() (Config, error) {
 		return Config{}, errors.New("MONGO_URI es obligatoria")
 	}
 
+	appPort := envOrDefault("APP_PORT", "8002")
+	servicePort, err := strconv.Atoi(envOrDefault("SERVICE_PORT", appPort))
+	if err != nil {
+		return Config{}, fmt.Errorf("SERVICE_PORT inválida: %w", err)
+	}
+
+	consulEnabled, err := boolFromEnv("CONSUL_ENABLED")
+	if err != nil {
+		return Config{}, err
+	}
+
+	mongoDatabase, mongoDatabaseFromEnv := lookupNonEmpty("MONGO_DATABASE_NAME")
+	if !mongoDatabaseFromEnv {
+		mongoDatabase = "pdf_extractext"
+	}
+	mongoCollection, mongoCollectionFromEnv := lookupNonEmpty("MONGO_COLLECTION_NAME")
+	if !mongoCollectionFromEnv {
+		mongoCollection = "pdf_documents"
+	}
+
 	return Config{
-		AppName:         envOrDefault("APP_NAME", "pdf-extractext-persistence"),
-		Environment:     envOrDefault("APP_ENV", "local"),
-		Port:            envOrDefault("APP_PORT", "8002"),
-		MongoURI:        uri,
-		MongoDatabase:   envOrDefault("MONGO_DATABASE_NAME", "pdf_extractext"),
-		MongoCollection: envOrDefault("MONGO_COLLECTION_NAME", "pdf_documents"),
+		AppName:                envOrDefault("APP_NAME", "pdf-extractext-persistence"),
+		Environment:            envOrDefault("APP_ENV", "local"),
+		Port:                   appPort,
+		MongoURI:               uri,
+		MongoDatabase:          mongoDatabase,
+		MongoCollection:        mongoCollection,
+		ConsulHTTPAddr:         envOrDefault("CONSUL_HTTP_ADDR", "consul:8500"),
+		ConsulHTTPToken:        os.Getenv("CONSUL_HTTP_TOKEN"),
+		ConsulEnabled:          consulEnabled,
+		ServiceName:            envOrDefault("SERVICE_NAME", "persistence"),
+		ServicePort:            servicePort,
+		ServiceHealthPath:      envOrDefault("SERVICE_HEALTH_PATH", "/health/ready"),
+		mongoDatabaseFromEnv:   mongoDatabaseFromEnv,
+		mongoCollectionFromEnv: mongoCollectionFromEnv,
 	}, nil
 }
 
 func envOrDefault(key, fallback string) string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
+	if v, ok := lookupNonEmpty(key); ok {
 		return v
 	}
 	return fallback
+}
+
+func lookupNonEmpty(key string) (string, bool) {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return "", false
+	}
+	return v, true
+}
+
+func boolFromEnv(key string) (bool, error) {
+	raw, ok := lookupNonEmpty(key)
+	if !ok {
+		return false, nil
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("%s inválida (%q): %w", key, raw, err)
+	}
+	return value, nil
 }
