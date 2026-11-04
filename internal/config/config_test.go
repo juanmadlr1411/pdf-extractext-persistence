@@ -148,3 +148,86 @@ func TestLoad_RejectsInvalidServicePort(t *testing.T) {
 		t.Fatal("esperado error con SERVICE_PORT inválido, obtenido nil")
 	}
 }
+
+func TestApplyKV_Precedence(t *testing.T) {
+	tests := []struct {
+		name           string
+		envDatabase    string
+		envCollection  string
+		kv             map[string]string
+		wantDatabase   string
+		wantCollection string
+	}{
+		{
+			name:           "sin env ni KV usa defaults",
+			kv:             map[string]string{},
+			wantDatabase:   "pdf_extractext",
+			wantCollection: "pdf_documents",
+		},
+		{
+			name:           "KV pisa los defaults",
+			kv:             map[string]string{"MONGO_DATABASE_NAME": "kv_db", "MONGO_COLLECTION_NAME": "kv_docs"},
+			wantDatabase:   "kv_db",
+			wantCollection: "kv_docs",
+		},
+		{
+			name:           "env pisa a KV",
+			envDatabase:    "env_db",
+			envCollection:  "env_docs",
+			kv:             map[string]string{"MONGO_DATABASE_NAME": "kv_db", "MONGO_COLLECTION_NAME": "kv_docs"},
+			wantDatabase:   "env_db",
+			wantCollection: "env_docs",
+		},
+		{
+			name:           "valores KV vacíos no pisan los defaults",
+			kv:             map[string]string{"MONGO_DATABASE_NAME": "", "MONGO_COLLECTION_NAME": ""},
+			wantDatabase:   "pdf_extractext",
+			wantCollection: "pdf_documents",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("MONGO_URI", "mongodb://localhost:27017")
+			t.Setenv("MONGO_DATABASE_NAME", tc.envDatabase)
+			t.Setenv("MONGO_COLLECTION_NAME", tc.envCollection)
+			t.Setenv("CONSUL_ENABLED", "")
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("error inesperado: %v", err)
+			}
+			cfg.ApplyKV(tc.kv)
+
+			if cfg.MongoDatabase != tc.wantDatabase {
+				t.Errorf("MongoDatabase = %q, want %q", cfg.MongoDatabase, tc.wantDatabase)
+			}
+			if cfg.MongoCollection != tc.wantCollection {
+				t.Errorf("MongoCollection = %q, want %q", cfg.MongoCollection, tc.wantCollection)
+			}
+		})
+	}
+}
+
+func TestApplyKV_NeverOverridesMongoURI(t *testing.T) {
+	const envURI = "mongodb://env:27017"
+	t.Setenv("MONGO_URI", envURI)
+	t.Setenv("MONGO_DATABASE_NAME", "")
+	t.Setenv("MONGO_COLLECTION_NAME", "")
+	t.Setenv("CONSUL_ENABLED", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+
+	cfg.ApplyKV(map[string]string{
+		"MONGO_URI":             "mongodb://kv:27017",
+		"MONGO_DATABASE_NAME":   "kv_db",
+		"MONGO_COLLECTION_NAME": "kv_docs",
+	})
+
+	if cfg.MongoURI != envURI {
+		t.Errorf("MongoURI = %q, want %q (MONGO_URI solo se acepta por env)", cfg.MongoURI, envURI)
+	}
+}
