@@ -75,6 +75,21 @@ func Load() (Config, error) {
 	}, nil
 }
 
+// ApplyKV aplica MONGO_DATABASE_NAME y MONGO_COLLECTION_NAME con precedencia env > KV > default.
+func (c *Config) ApplyKV(values map[string]string) {
+	if !c.mongoDatabaseFromEnv {
+		if v := values["MONGO_DATABASE_NAME"]; v != "" {
+			c.MongoDatabase = v
+		}
+	}
+	if !c.mongoCollectionFromEnv {
+		if v := values["MONGO_COLLECTION_NAME"]; v != "" {
+			c.MongoCollection = v
+		}
+	}
+	// MONGO_URI nunca se lee del KV: solo se acepta por variable de entorno.
+}
+
 func envOrDefault(key, fallback string) string {
 	if v, ok := lookupNonEmpty(key); ok {
 		return v

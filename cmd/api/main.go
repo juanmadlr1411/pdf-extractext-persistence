@@ -30,6 +30,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	var consulClient *consul.Client
+	if cfg.ConsulEnabled {
+		consulClient = consul.NewClient(cfg.ConsulHTTPAddr, cfg.ConsulHTTPToken)
+
+		kvCtx, cancelKV := context.WithTimeout(ctx, 5*time.Second)
+		values, err := consul.FetchKVConfig(kvCtx, consulClient, consul.PersistenceConfigPrefix)
+		cancelKV()
+		if err != nil {
+			slog.Warn("no se pudo leer configuración desde Consul KV; se usan env/defaults", "error", err)
+		} else {
+			cfg.ApplyKV(values)
+			slog.Info("configuración cargada desde Consul KV", "database", cfg.MongoDatabase, "collection", cfg.MongoCollection)
+		}
+	}
+
 	// Fail-fast: sin conexión ni índice único garantizado, el servicio no arranca.
 	mongoClient := mongo.New(cfg.MongoURI, cfg.MongoDatabase, cfg.MongoCollection)
 
@@ -57,9 +75,6 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	go func() {
 		slog.Info("servicio iniciado", "service", cfg.AppName, "env", cfg.Environment, "port", cfg.Port)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -68,11 +83,8 @@ func main() {
 		}
 	}()
 
-	var consulClient *consul.Client
 	var serviceID string
 	if cfg.ConsulEnabled {
-		consulClient = consul.NewClient(cfg.ConsulHTTPAddr, cfg.ConsulHTTPToken)
-
 		hostname, err := os.Hostname()
 		if err != nil {
 			slog.Warn("no se pudo obtener el hostname; se omite el registro en Consul", "error", err)
