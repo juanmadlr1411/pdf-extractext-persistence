@@ -11,9 +11,6 @@ import (
 	"github.com/pdf-extractext/persistence/internal/service"
 )
 
-// TestCreateDocument_ContractRejections verifica los rechazos del contrato
-// en POST /documents: 400 INVALID_REQUEST (deserialización estricta) y
-// 422 FILENAME_TOO_LONG (validación del servicio).
 func TestCreateDocument_ContractRejections(t *testing.T) {
 	cfg := config.Config{AppName: "pdf-extractext-persistence", Environment: "local"}
 	svc := service.NewDocumentService(newFakeDocumentRepository())
@@ -84,12 +81,10 @@ func TestCreateDocument_ContractRejections(t *testing.T) {
 
 			router.ServeHTTP(rec, req)
 
-			// Assert: status code
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("esperado status %d, obtenido %d (body: %s)", tt.wantStatus, rec.Code, rec.Body.String())
 			}
 
-			// Assert: problem RFC 9457 con el code esperado.
 			assertProblem(t, rec, tt.wantCode)
 		})
 	}

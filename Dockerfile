@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
 
-# --- Stage 1: build ---
 FROM golang:1.27-alpine AS builder
 
 WORKDIR /src
@@ -11,7 +10,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod download
 
-# Compilar servicio y healthprobe (binarios estáticos)
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -21,7 +19,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags="-s -w" -o /app/healthprobe ./cmd/healthprobe
 
-# --- Stage 2: runtime mínimo ---
 FROM gcr.io/distroless/static-debian12:nonroot
 
 COPY --from=builder /app/api /app/api

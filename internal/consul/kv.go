@@ -6,12 +6,11 @@ import (
 	"strings"
 )
 
-// KVReader abstrae la lectura recursiva del KV para poder testear la precedencia.
+// Permite testear la precedencia de configuración.
 type KVReader interface {
 	KVList(context.Context, string) ([]KVEntry, error)
 }
 
-// FetchKVConfig devuelve solo las claves directas bajo el prefijo indicado.
 func FetchKVConfig(ctx context.Context, reader KVReader, prefix string) (map[string]string, error) {
 	entries, err := reader.KVList(ctx, prefix)
 	if err != nil {

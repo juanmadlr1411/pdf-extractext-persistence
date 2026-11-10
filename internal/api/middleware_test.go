@@ -12,9 +12,6 @@ import (
 	"github.com/pdf-extractext/persistence/internal/config"
 )
 
-// TestPanicRecoveryMiddleware verifica que un pánico en cualquier handler es
-// interceptado: la app no crashea y se responde con HTTP 500 y el problem
-// RFC 9457 INTERNAL_ERROR sin filtrar información interna.
 func TestPanicRecoveryMiddleware(t *testing.T) {
 	t.Parallel()
 
@@ -61,8 +58,6 @@ func TestPanicRecoveryMiddleware(t *testing.T) {
 	}
 }
 
-// TestPanicRecoveryMiddlewarePassthrough verifica que el middleware no
-// interfiere con handlers que no disparan pánico.
 func TestPanicRecoveryMiddlewarePassthrough(t *testing.T) {
 	t.Parallel()
 
@@ -84,13 +79,6 @@ func TestPanicRecoveryMiddlewarePassthrough(t *testing.T) {
 	}
 }
 
-// --- Tests del middleware de correlación X-Request-ID ---
-
-// TestRequestIDMiddleware_PropagatesIncomingHeader verifica que, cuando el
-// cliente envía el header X-Request-ID, el middleware propaga exactamente
-// el mismo valor al header de la respuesta y al contexto de la petición.
-// También comprueba que el header de respuesta ya está fijado antes de que
-// el handler se ejecute (requisito: set antes de next.ServeHTTP).
 func TestRequestIDMiddleware_PropagatesIncomingHeader(t *testing.T) {
 	t.Parallel()
 
@@ -123,10 +111,6 @@ func TestRequestIDMiddleware_PropagatesIncomingHeader(t *testing.T) {
 	}
 }
 
-// TestRequestIDMiddleware_GeneratesUUIDv4WhenMissing verifica que, cuando el
-// cliente NO envía el header X-Request-ID, el middleware genera un UUID v4
-// válido, lo inyecta en el header de la respuesta y en el contexto, y que
-// cada petición recibe un ID distinto.
 func TestRequestIDMiddleware_GeneratesUUIDv4WhenMissing(t *testing.T) {
 	t.Parallel()
 
@@ -137,8 +121,6 @@ func TestRequestIDMiddleware_GeneratesUUIDv4WhenMissing(t *testing.T) {
 
 	handler := requestIDMiddleware(captureHandler)
 
-	// serve ejecuta una petición y devuelve el ID del header de respuesta
-	// junto al ID visible en el contexto durante esa misma petición.
 	serve := func() (headerID, contextID string) {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/documents", nil))
@@ -169,9 +151,6 @@ func TestRequestIDMiddleware_GeneratesUUIDv4WhenMissing(t *testing.T) {
 	}
 }
 
-// TestRouter_SetsXRequestIDGlobally verifica la integración: el router chi
-// inyecta el middleware de correlación globalmente, por lo que toda
-// respuesta incluye el header X-Request-ID.
 func TestRouter_SetsXRequestIDGlobally(t *testing.T) {
 	t.Parallel()
 

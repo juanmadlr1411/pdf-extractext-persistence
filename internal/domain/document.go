@@ -5,7 +5,6 @@ import (
 	"fmt"
 )
 
-// Document representa un documento persistido con su texto extraído.
 type Document struct {
 	ID            string
 	Filename      string

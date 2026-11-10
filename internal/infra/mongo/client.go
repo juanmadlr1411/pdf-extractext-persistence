@@ -1,5 +1,4 @@
-// Package mongo gestiona la conexión a MongoDB y el ownership de los índices
-// de la colección de documentos del Persistence Service.
+// Package mongo gestiona la conexión a MongoDB y el ownership de índices.
 package mongo
 
 import (
@@ -11,15 +10,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-// Database define el ciclo de vida de la conexión y el ownership de índices.
 type Database interface {
 	Connect(ctx context.Context) error
 	Disconnect(ctx context.Context) error
 	SetupIndexes(ctx context.Context) error
 }
 
-// MongoDBClient envuelve el cliente oficial de MongoDB junto con los nombres de
-// database y colección de los que el servicio es dueño.
 type MongoDBClient struct {
 	uri        string
 	client     *mongo.Client
@@ -27,7 +23,6 @@ type MongoDBClient struct {
 	collection string
 }
 
-// Client mantiene compatibilidad con el tipo anterior.
 type Client = MongoDBClient
 
 var _ Database = (*MongoDBClient)(nil)
@@ -41,7 +36,6 @@ func New(uri, database, collection string) *MongoDBClient {
 	}
 }
 
-// Connect establece la conexión con MongoDB y la verifica con un Ping.
 func (c *MongoDBClient) Connect(ctx context.Context) error {
 	mongoClient, err := mongo.Connect(options.Client().ApplyURI(c.uri))
 	if err != nil {
@@ -62,7 +56,6 @@ func (c *MongoDBClient) Check(ctx context.Context) error {
 	return nil
 }
 
-// Disconnect cierra la conexión con MongoDB.
 func (c *MongoDBClient) Disconnect(ctx context.Context) error {
 	if err := c.client.Disconnect(ctx); err != nil {
 		return fmt.Errorf("no se pudo cerrar la conexión a MongoDB: %w", err)
@@ -82,7 +75,6 @@ func (c *MongoDBClient) SetupIndexes(ctx context.Context) error {
 	return nil
 }
 
-// Collection expone la colección gestionada por este cliente.
 func (c *MongoDBClient) Collection() *mongo.Collection {
 	return c.client.Database(c.database).Collection(c.collection)
 }

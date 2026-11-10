@@ -1,20 +1,4 @@
-// Tabla del contrato C2 (docs/specs/persistence-service.md) verificada por
-// esta suite. Una fila de la tabla = un test; los fallos citan la regla.
-//
-//	| Fila  | Método y escenario                            | Status | Cuerpo esperado                                              |
-//	|-------|-----------------------------------------------|--------|--------------------------------------------------------------|
-//	| C2.1  | POST /documents exitoso                       | 201    | documento exacto {id hex-24, filename, extracted_text, checksum} |
-//	| C2.2  | cuerpos/IDs inválidos                         | 400    | problem RFC 9457, code INVALID_REQUEST                       |
-//	| C2.3  | POST con checksum ya persistido (caso estrella)| 409   | problem RFC 9457, code DUPLICATE_CHECKSUM + document completo |
-//	| C2.4  | dependencia (MongoDB) caída                   | 503    | problem RFC 9457, code DEPENDENCY_UNAVAILABLE                |
-//	| C2.5  | recurso inexistente / DELETE repetido         | 404    | problem RFC 9457, code NOT_FOUND                             |
-//	| C2.6  | PATCH con filename > 100 caracteres           | 422    | problem RFC 9457, code FILENAME_TOO_LONG                     |
-//	| C2.7  | GET /documents/{id} existente                 | 200    | documento exacto (4 campos)                                  |
-//	| C2.8  | GET /documents (listado)                      | 200    | array JSON; vacío se serializa [] (nunca null)               |
-//	| C2.9  | PATCH rename / mismo valor                    | 200    | documento con filename mutado; idempotente                   |
-//	| C2.10 | DELETE /documents/{id} existente              | 204    | sin cuerpo                                                   |
-//	| C2.11 | trazabilidad                                  | —      | X-Request-ID propagado o generado (UUID v4)                  |
-//	| C2.12 | GET /documents/by-checksum/{checksum}         | 200/404| documento exacto o NOT_FOUND; checksum inválido → 400       |
+// Contrato C2 verificado por esta suite (ver README.md).
 package contract
 
 import (
@@ -29,16 +13,12 @@ import (
 )
 
 const (
-	// validObjectID es un id válido del contrato: hex de 24 minúsculas.
-	validObjectID = "507f1f77bcf86cd799439011"
-	// missingObjectID tiene formato válido pero no existe en el almacén.
+	validObjectID   = "507f1f77bcf86cd799439011"
 	missingObjectID = "507f1f77bcf86cd7994390ff"
 
 	createPayload = `{"filename":"informe.pdf","extracted_text":"texto extraído","checksum":"sha256:abc123"}`
 )
 
-// seededDocument devuelve un documento preexistente típico para disponer
-// estado inicial en el almacén.
 func seededDocument() domain.Document {
 	return domain.Document{
 		ID:            validObjectID,
@@ -48,11 +28,6 @@ func seededDocument() domain.Document {
 	}
 }
 
-// --- Fila C2.1: Happy Path (201) ---
-
-// TestC2_01_CreateDocument_HappyPath verifica la creación exitosa: 201 con
-// la serialización exacta del cuerpo de respuesta (4 campos) y el id
-// generado cumpliendo la regla de dominio del formato (hex de 24).
 func TestC2_01_CreateDocument_HappyPath(t *testing.T) {
 	t.Parallel()
 	const rule = "C2.1 · POST /documents exitoso → 201"
@@ -80,12 +55,6 @@ func TestC2_01_CreateDocument_HappyPath(t *testing.T) {
 	assertObjectIDFormat(t, rule, id)
 }
 
-// --- Fila C2.2: Errores estándar 400 INVALID_REQUEST ---
-
-// TestC2_02_InvalidRequest_400 verifica cada variante de petición inválida:
-// JSON malformado, cuerpo vacío, filename ausente en PATCH e IDs de recurso
-// que no cumplen el formato hex-24. Todas responden 400 con el code
-// INVALID_REQUEST del catálogo y el problem RFC 9457.
 func TestC2_02_InvalidRequest_400(t *testing.T) {
 	t.Parallel()
 
@@ -119,13 +88,6 @@ func TestC2_02_InvalidRequest_400(t *testing.T) {
 	}
 }
 
-// --- Fila C2.3: Caso estrella 409 DUPLICATE_CHECKSUM ---
-
-// TestC2_03_DuplicateChecksum_409 verifica el conflicto: POST con un
-// checksum ya persistido responde 409 con el problem RFC 9457 MÁS el
-// documento existente completo en la clave 'document' (exactamente 6
-// claves). El conflicto se detecta en el único intento de inserción
-// (anti-TOCTOU observable).
 func TestC2_03_DuplicateChecksum_409(t *testing.T) {
 	t.Parallel()
 	const rule = "C2.3 · POST con checksum duplicado → 409 DUPLICATE_CHECKSUM + documento existente"
@@ -168,12 +130,6 @@ func TestC2_03_DuplicateChecksum_409(t *testing.T) {
 	}
 }
 
-// --- Fila C2.4: 503 DEPENDENCY_UNAVAILABLE ---
-
-// TestC2_04_DependencyUnavailable_503 verifica la indisponibilidad de la
-// dependencia crítica: tanto la escritura contra el almacén caído como el
-// readiness check responden 503 con el code DEPENDENCY_UNAVAILABLE y el
-// problem RFC 9457 (sin document ni campos extra).
 func TestC2_04_DependencyUnavailable_503(t *testing.T) {
 	t.Parallel()
 
@@ -205,14 +161,8 @@ func TestC2_04_DependencyUnavailable_503(t *testing.T) {
 	})
 }
 
-// errDependencyDown simula el fallo del health check de la dependencia.
 var errDependencyDown = errors.New("dependencia crítica caída")
 
-// --- Fila C2.5: 404 NOT_FOUND ---
-
-// TestC2_05_NotFound_404 verifica la ausencia de recurso: GET y PATCH sobre
-// un id válido pero inexistente, y la semántica del DELETE repetido (lo que
-// ya no existe devuelve 404). Todas con el code NOT_FOUND del catálogo.
 func TestC2_05_NotFound_404(t *testing.T) {
 	t.Parallel()
 
@@ -254,11 +204,6 @@ func TestC2_05_NotFound_404(t *testing.T) {
 	})
 }
 
-// --- Fila C2.6: 422 FILENAME_TOO_LONG ---
-
-// TestC2_06_FilenameTooLong_422 verifica el invariante de dominio de la
-// longitud del filename en la mutación: más de 100 caracteres responde 422
-// con el code FILENAME_TOO_LONG del catálogo y problem RFC 9457.
 func TestC2_06_FilenameTooLong_422(t *testing.T) {
 	t.Parallel()
 	const rule = "C2.6 · PATCH con filename de 101 caracteres → 422 FILENAME_TOO_LONG"
@@ -275,10 +220,6 @@ func TestC2_06_FilenameTooLong_422(t *testing.T) {
 	assertProblem(t, rule, res.body, http.StatusUnprocessableEntity, "FILENAME_TOO_LONG")
 }
 
-// --- Fila C2.7: GET por id, documento exacto ---
-
-// TestC2_07_GetDocument_200 verifica la lectura de un documento existente:
-// 200 con la serialización exacta de los 4 campos del contrato.
 func TestC2_07_GetDocument_200(t *testing.T) {
 	t.Parallel()
 	const rule = "C2.7 · GET /documents/{id} existente → 200 con documento exacto"
@@ -295,11 +236,6 @@ func TestC2_07_GetDocument_200(t *testing.T) {
 	assertContractDocument(t, rule, decodeJSONObject(t, rule, res.body), want)
 }
 
-// --- Fila C2.8: Listado ---
-
-// TestC2_08_ListDocuments_200 verifica el listado: 200 con array JSON donde
-// la lista vacía se serializa como [] (nunca null) y cada documento serializa
-// exactamente los 4 campos del contrato.
 func TestC2_08_ListDocuments_200(t *testing.T) {
 	t.Parallel()
 
@@ -367,11 +303,6 @@ func TestC2_08_ListDocuments_200(t *testing.T) {
 	})
 }
 
-// --- Fila C2.9: PATCH — mutación controlada e idempotencia ---
-
-// TestC2_09_PatchDocument_200 verifica las reglas de mutación: el rename
-// solo muta filename (extracted_text y checksum intactos, mismo id) y un
-// PATCH al mismo valor es idempotente (200 con el documento sin cambios).
 func TestC2_09_PatchDocument_200(t *testing.T) {
 	t.Parallel()
 
@@ -411,10 +342,6 @@ func TestC2_09_PatchDocument_200(t *testing.T) {
 	})
 }
 
-// --- Fila C2.10: DELETE 204 ---
-
-// TestC2_10_DeleteDocument_204 verifica la eliminación exitosa: 204 y sin
-// cuerpo (el contrato no define cuerpo para el 204).
 func TestC2_10_DeleteDocument_204(t *testing.T) {
 	t.Parallel()
 	const rule = "C2.10 · DELETE /documents/{id} existente → 204 sin cuerpo"
@@ -429,12 +356,6 @@ func TestC2_10_DeleteDocument_204(t *testing.T) {
 	assertNoBody(t, rule, res.body)
 }
 
-// --- Fila C2.11: Trazabilidad X-Request-ID ---
-
-// TestC2_11_XRequestID verifica la propagación de headers de correlación:
-// el X-Request-ID entrante se devuelve exactamente igual; sin header
-// entrante el servicio genera un UUID v4; y el header está presente
-// también en las respuestas de error.
 func TestC2_11_XRequestID(t *testing.T) {
 	t.Parallel()
 

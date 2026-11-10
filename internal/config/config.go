@@ -8,7 +8,6 @@ import (
 	"strconv"
 )
 
-// Config contiene la configuración del servicio leída de variables de entorno.
 type Config struct {
 	AppName         string
 	Environment     string
@@ -29,9 +28,7 @@ type Config struct {
 	mongoCollectionFromEnv bool
 }
 
-// Load lee la configuración desde las variables de entorno, aplicando valores
-// por defecto cuando corresponde. MONGO_URI es obligatoria: si falta, Load
-// devuelve error.
+// MONGO_URI es obligatoria: si falta, Load devuelve error.
 func Load() (Config, error) {
 	uri, ok := os.LookupEnv("MONGO_URI")
 	if !ok || uri == "" {
@@ -77,7 +74,7 @@ func Load() (Config, error) {
 	}, nil
 }
 
-// ApplyKV aplica MONGO_DATABASE_NAME y MONGO_COLLECTION_NAME con precedencia env > KV > default.
+// Precedencia env > KV > default.
 func (c *Config) ApplyKV(values map[string]string) {
 	if !c.mongoDatabaseFromEnv {
 		if v := values["MONGO_DATABASE_NAME"]; v != "" {

@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// --- Tests de DELETE /documents/{id} ---
-
-// DELETE sobre un documento existente -> 204 sin cuerpo.
 func TestDeleteDocument_Existing_Returns204(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	repo.byID["507f1f77bcf86cd799439011"] = seedDocument()
@@ -29,7 +26,6 @@ func TestDeleteDocument_Existing_Returns204(t *testing.T) {
 	}
 }
 
-// Segundo DELETE sobre el mismo id -> 404 NOT_FOUND (ya eliminado).
 func TestDeleteDocument_SecondDelete_Returns404(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	repo.byID["507f1f77bcf86cd799439011"] = seedDocument()
@@ -47,7 +43,6 @@ func TestDeleteDocument_SecondDelete_Returns404(t *testing.T) {
 	assertProblem(t, second, "NOT_FOUND")
 }
 
-// ID de formato inválido -> 400 fail-fast sin tocar el repositorio.
 func TestDeleteDocument_InvalidID_Returns400(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	router := newTestRouter(repo)
