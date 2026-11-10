@@ -107,6 +107,21 @@ func TestClient_Register_RespectsContextTimeout(t *testing.T) {
 	}
 }
 
+func TestClient_OmitsACLHeaderWhenTokenEmpty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if values := r.Header.Values("X-Consul-Token"); len(values) != 0 {
+			t.Errorf("X-Consul-Token = %q, want header ausente", values)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "")
+	if err := client.Deregister(context.Background(), "persistence-host"); err != nil {
+		t.Fatalf("Deregister() error inesperado: %v", err)
+	}
+}
+
 func TestClient_Deregister_SendsACLHeader(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {

@@ -147,7 +147,9 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*
 	if err != nil {
 		return nil, fmt.Errorf("construir request a Consul: %w", err)
 	}
-	req.Header.Set("X-Consul-Token", c.token)
+	if c.token != "" {
+		req.Header.Set("X-Consul-Token", c.token)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
