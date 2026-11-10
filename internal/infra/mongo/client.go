@@ -27,7 +27,6 @@ type MongoDBClient struct {
 	collection string
 }
 
-// Client mantiene compatibilidad con el tipo anterior.
 type Client = MongoDBClient
 
 var _ Database = (*MongoDBClient)(nil)

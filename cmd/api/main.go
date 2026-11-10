@@ -101,8 +101,7 @@ func main() {
 	}
 
 	shutdown := func() error {
-		// Presupuesto total bajo stop_grace_period: 20s de Docker:
-		// deregister <=5s + drain 5s + HTTP shutdown + 3s de Mongo aislado = 18s máximo.
+		// Deregister, drenaje y HTTP comparten este contexto; Mongo usa 3s propios.
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 

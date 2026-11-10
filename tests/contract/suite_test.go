@@ -56,15 +56,15 @@ func newContractStore() *contractStore {
 	}
 }
 
-// Save replica el flujo anti-TOCTOU del repositorio real: un único intento
-// de inserción; si el índice único de checksum reporta conflicto, devuelve
-// el documento existente completo envuelto en *domain.DuplicateChecksumError.
 func generateID() string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
 
+// Save replica el flujo anti-TOCTOU del repositorio real: un único intento
+// de inserción; si el índice único de checksum reporta conflicto, devuelve
+// el documento existente completo envuelto en *domain.DuplicateChecksumError.
 func (s *contractStore) Save(_ context.Context, doc domain.Document) (domain.Document, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

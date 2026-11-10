@@ -25,7 +25,6 @@ func extractValidObjectID(w http.ResponseWriter, r *http.Request) (string, bool)
 }
 
 // createDocumentRequest es el payload de entrada del endpoint POST /documents.
-// La deserialización es estricta: solo se aceptan estos campos.
 type createDocumentRequest struct {
 	Filename      string `json:"filename"`
 	ExtractedText string `json:"extracted_text,omitempty"`
