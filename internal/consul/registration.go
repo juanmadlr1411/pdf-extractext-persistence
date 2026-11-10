@@ -21,13 +21,14 @@ const (
 
 // RegistrationInput reúne los datos con los que se construye el payload de Consul.
 type RegistrationInput struct {
-	ServiceID   string
-	ServiceName string
-	Address     string
-	Port        int
-	HealthPath  string
-	Version     string
-	Commit      string
+	ServiceID     string
+	ServiceName   string
+	ServiceDomain string
+	Address       string
+	Port          int
+	HealthPath    string
+	Version       string
+	Commit        string
 }
 
 // Registrar abstrae las operaciones de Consul que usa el ciclo de vida.
@@ -93,9 +94,14 @@ func BuildRegistration(in RegistrationInput) ServiceRegistration {
 		healthPath = "/" + healthPath
 	}
 
+	domain := in.ServiceDomain
+	if domain == "" {
+		domain = persistenceDomain
+	}
+
 	router := "traefik.http.routers." + name
 	servicePortKey := "traefik.http.services." + name + ".loadbalancer.server.port"
-	rule := fmt.Sprintf("Host(`%s.%s`)", name, persistenceDomain)
+	rule := fmt.Sprintf("Host(`%s.%s`)", name, domain)
 	portText := strconv.Itoa(port)
 
 	return ServiceRegistration{

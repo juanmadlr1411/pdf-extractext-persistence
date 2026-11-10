@@ -122,6 +122,29 @@ func TestBuildRegistration_PayloadSnapshot(t *testing.T) {
 	}
 }
 
+func TestBuildRegistration_UsesInjectedServiceDomain(t *testing.T) {
+	reg := BuildRegistration(RegistrationInput{
+		ServiceID:     "persistence-host-1",
+		ServiceName:   "persistence",
+		ServiceDomain: "staging.internal",
+		Address:       "10.0.1.23",
+		Port:          8002,
+		HealthPath:    "/health/ready",
+	})
+
+	rule := "Host(`persistence.staging.internal`)"
+	tags := strings.Join(reg.Tags, "\n")
+	if !strings.Contains(tags, "traefik.http.routers.persistence.rule="+rule) {
+		t.Errorf("tags = %v, deben incluir la regla con dominio inyectado", reg.Tags)
+	}
+	if got := reg.Meta["traefik.http.routers.persistence.rule"]; got != rule {
+		t.Errorf("meta rule = %q, want %q", got, rule)
+	}
+	if strings.Contains(tags, "pdf-extractext.localhost") {
+		t.Errorf("tags = %v, no deben contener el dominio hardcodeado", reg.Tags)
+	}
+}
+
 type fakeRegistrar struct {
 	failures int
 	attempts int

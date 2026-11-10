@@ -21,6 +21,7 @@ type Config struct {
 	ConsulHTTPToken   string
 	ConsulEnabled     bool
 	ServiceName       string
+	ServiceDomain     string
 	ServicePort       int
 	ServiceHealthPath string
 
@@ -68,6 +69,7 @@ func Load() (Config, error) {
 		ConsulHTTPToken:        os.Getenv("CONSUL_HTTP_TOKEN"),
 		ConsulEnabled:          consulEnabled,
 		ServiceName:            envOrDefault("SERVICE_NAME", "persistence"),
+		ServiceDomain:          envOrDefault("SERVICE_DOMAIN", "pdf-extractext.localhost"),
 		ServicePort:            servicePort,
 		ServiceHealthPath:      envOrDefault("SERVICE_HEALTH_PATH", "/health/ready"),
 		mongoDatabaseFromEnv:   mongoDatabaseFromEnv,

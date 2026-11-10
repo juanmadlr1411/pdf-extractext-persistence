@@ -25,6 +25,7 @@ Variables de entorno:
 | `CONSUL_HTTP_ADDR`      | Dirección HTTP de Consul     | `consul:8500`                |
 | `CONSUL_HTTP_TOKEN`     | Token ACL de Consul          | *(vacío)*                    |
 | `SERVICE_NAME`          | Nombre del servicio          | `persistence`                |
+| `SERVICE_DOMAIN`        | Dominio para la regla Traefik | `pdf-extractext.localhost`  |
 | `SERVICE_PORT`          | Puerto anunciado             | `APP_PORT` (`8002`)          |
 | `SERVICE_HEALTH_PATH`   | Check de readiness           | `/health/ready`              |
 
@@ -44,7 +45,9 @@ Con `CONSUL_ENABLED=true` el arranque es:
    está conectado a la red `services` y a la red `data`; el dial a Consul
    garantiza anunciar la IP de la red `services` (alcanzable por Traefik y
    Consul), no la de `data`.
-3. Registra el ID `persistence-<hostname>` con tags y meta espejo de Traefik:
+3. Registra el ID `persistence-<hostname>` con tags y meta espejo de Traefik. El
+   dominio de la regla `Host(...)` se toma de `SERVICE_DOMAIN` (por defecto
+   `pdf-extractext.localhost`):
 
    ```text
    traefik.enable=true

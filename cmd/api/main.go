@@ -93,13 +93,14 @@ func main() {
 		} else {
 			serviceID = consul.ServiceID(cfg.ServiceName, hostname)
 			registration := consul.BuildRegistration(consul.RegistrationInput{
-				ServiceID:   serviceID,
-				ServiceName: cfg.ServiceName,
-				Address:     address,
-				Port:        cfg.ServicePort,
-				HealthPath:  cfg.ServiceHealthPath,
-				Version:     version,
-				Commit:      commit,
+				ServiceID:     serviceID,
+				ServiceName:   cfg.ServiceName,
+				ServiceDomain: cfg.ServiceDomain,
+				Address:       address,
+				Port:          cfg.ServicePort,
+				HealthPath:    cfg.ServiceHealthPath,
+				Version:       version,
+				Commit:        commit,
 			})
 			go consul.RegisterWithRetry(ctx, consulClient, registration)
 		}

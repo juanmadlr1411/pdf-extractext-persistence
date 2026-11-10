@@ -81,6 +81,34 @@ func TestLoad_AppliesConsulDefaults(t *testing.T) {
 	}
 }
 
+func TestLoad_AppliesServiceDomainDefault(t *testing.T) {
+	t.Setenv("MONGO_URI", "mongodb://localhost:27017")
+	t.Setenv("SERVICE_DOMAIN", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+
+	if cfg.ServiceDomain != "pdf-extractext.localhost" {
+		t.Errorf("ServiceDomain por defecto esperado %q, obtenido %q", "pdf-extractext.localhost", cfg.ServiceDomain)
+	}
+}
+
+func TestLoad_RespectsServiceDomainOverride(t *testing.T) {
+	t.Setenv("MONGO_URI", "mongodb://localhost:27017")
+	t.Setenv("SERVICE_DOMAIN", "staging.internal")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+
+	if cfg.ServiceDomain != "staging.internal" {
+		t.Errorf("ServiceDomain esperado %q, obtenido %q", "staging.internal", cfg.ServiceDomain)
+	}
+}
+
 func TestLoad_RespectsConsulOverrides(t *testing.T) {
 	t.Setenv("MONGO_URI", "mongodb://localhost:27017")
 	t.Setenv("APP_PORT", "9100")
