@@ -411,3 +411,59 @@ func TestC2_11_XRequestID(t *testing.T) {
 		}
 	})
 }
+
+// --- Fila C2.12: lookup por checksum ---
+
+// TestC2_12_GetDocumentByChecksum verifica el endpoint interno que usa la API
+// para resolver la cache anti-duplicados antes de extraer.
+func TestC2_12_GetDocumentByChecksum(t *testing.T) {
+	t.Parallel()
+
+	const validChecksum = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+	const missingChecksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	t.Run("existente → 200 con documento exacto", func(t *testing.T) {
+		t.Parallel()
+		const rule = "C2.12 · GET /documents/by-checksum/{checksum} existente → 200"
+
+		store := newContractStore()
+		want := domain.Document{
+			ID:            validObjectID,
+			Filename:      "informe.pdf",
+			ExtractedText: "texto extraído",
+			Checksum:      validChecksum,
+		}
+		store.seed(want)
+		srv := newContractServer(t, store, stubHealthChecker{})
+
+		res := doRequest(t, srv, http.MethodGet, "/documents/by-checksum/"+validChecksum, "", nil)
+
+		assertStatus(t, rule, res.status, http.StatusOK)
+		assertJSONContentType(t, rule, res)
+		assertContractDocument(t, rule, decodeJSONObject(t, rule, res.body), want)
+	})
+
+	t.Run("inexistente → 404 NOT_FOUND", func(t *testing.T) {
+		t.Parallel()
+		const rule = "C2.12 · GET /documents/by-checksum/{checksum} inexistente → 404"
+
+		srv := newContractServer(t, newContractStore(), stubHealthChecker{})
+
+		res := doRequest(t, srv, http.MethodGet, "/documents/by-checksum/"+missingChecksum, "", nil)
+
+		assertStatus(t, rule, res.status, http.StatusNotFound)
+		assertProblem(t, rule, res.body, http.StatusNotFound, "NOT_FOUND")
+	})
+
+	t.Run("checksum inválido → 400 INVALID_REQUEST", func(t *testing.T) {
+		t.Parallel()
+		const rule = "C2.12 · GET /documents/by-checksum/{checksum} inválido → 400"
+
+		srv := newContractServer(t, newContractStore(), stubHealthChecker{})
+
+		res := doRequest(t, srv, http.MethodGet, "/documents/by-checksum/no-es-sha256", "", nil)
+
+		assertStatus(t, rule, res.status, http.StatusBadRequest)
+		assertProblem(t, rule, res.body, http.StatusBadRequest, "INVALID_REQUEST")
+	})
+}

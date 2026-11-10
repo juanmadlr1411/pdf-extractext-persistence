@@ -22,6 +22,7 @@ type DocumentRepository interface {
 	Save(ctx context.Context, doc domain.Document) (domain.Document, error)
 	FindAll(ctx context.Context) ([]domain.Document, error)
 	FindByID(ctx context.Context, id string) (domain.Document, error)
+	FindByChecksum(ctx context.Context, checksum string) (domain.Document, error)
 	UpdateFilename(ctx context.Context, id, filename string) (domain.Document, error)
 	DeleteByID(ctx context.Context, id string) error
 }
@@ -51,6 +52,10 @@ func (s *DocumentService) List(ctx context.Context) ([]domain.Document, error) {
 
 func (s *DocumentService) GetByID(ctx context.Context, id string) (domain.Document, error) {
 	return s.repo.FindByID(ctx, id)
+}
+
+func (s *DocumentService) GetByChecksum(ctx context.Context, checksum string) (domain.Document, error) {
+	return s.repo.FindByChecksum(ctx, checksum)
 }
 
 func (s *DocumentService) UpdateFilename(ctx context.Context, id, filename string) (domain.Document, error) {

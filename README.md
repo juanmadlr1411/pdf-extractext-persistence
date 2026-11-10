@@ -81,6 +81,7 @@ docker exec pdf-extractext-consul-1 wget -qO- \
 | `POST` | `/documents` | Crea un documento. `201`; `400` cuerpo inválido; `409` `DUPLICATE_CHECKSUM` (adjunta el documento existente que provoca el conflicto); `503` dependencia caída; `500`. |
 | `GET` | `/documents` | Lista todos los documentos (`200`). |
 | `GET` | `/documents/{id}` | Obtiene uno (`200`); `400` id con formato inválido; `404`. |
+| `GET` | `/documents/by-checksum/{checksum}` | Lookup interno por SHA-256 hex (`200`); `400` checksum inválido; `404`; `503`. |
 | `PATCH` | `/documents/{id}` | Renombra (`{"filename": "..."}`); `200`; `400`; `404`; `422` `FILENAME_TOO_LONG`. |
 | `DELETE` | `/documents/{id}` | Elimina (`204`); `400` id inválido; `404`. |
 | `GET` | `/health` | Liveness (no depende de Mongo): `{"status":"ok","service":"...","environment":"..."}`. |

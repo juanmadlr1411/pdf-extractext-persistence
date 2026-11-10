@@ -147,6 +147,22 @@ func (r *DocumentRepository) FindByID(ctx context.Context, id string) (domain.Do
 	return documentFromBSON(documentBSON), nil
 }
 
+func (r *DocumentRepository) FindByChecksum(ctx context.Context, checksum string) (domain.Document, error) {
+	findResult := r.client.Collection().FindOne(ctx, bson.M{"checksum": checksum})
+	if errors.Is(findResult.Err(), mongo.ErrNoDocuments) {
+		return domain.Document{}, service.ErrDocumentNotFound
+	}
+	if findResult.Err() != nil {
+		return domain.Document{}, translateMongoError(fmt.Errorf("no se pudo obtener el documento por checksum: %w", findResult.Err()))
+	}
+
+	var documentBSON bson.M
+	if err := findResult.Decode(&documentBSON); err != nil {
+		return domain.Document{}, translateMongoError(fmt.Errorf("no se pudo decodificar el documento por checksum: %w", err))
+	}
+	return documentFromBSON(documentBSON), nil
+}
+
 func (r *DocumentRepository) UpdateFilename(ctx context.Context, id, filename string) (domain.Document, error) {
 	oid, err := parseObjectID(id)
 	if err != nil {
