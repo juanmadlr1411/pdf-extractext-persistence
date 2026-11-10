@@ -15,6 +15,10 @@ const (
 	// DefaultDrainDelay da tiempo a Traefik a dejar de enviar tráfico tras el deregistro.
 	DefaultDrainDelay = 5 * time.Second
 
+	// DefaultDisconnectTimeout acota el cierre de MongoDB con su propio presupuesto:
+	// si el contexto global ya venció durante el HTTP shutdown, la conexión igual se cierra.
+	DefaultDisconnectTimeout = 3 * time.Second
+
 	persistenceName   = "persistence"
 	persistenceDomain = "pdf-extractext.localhost"
 )
@@ -38,9 +42,10 @@ type Registrar interface {
 }
 
 // ShutdownHooks ordena las dependencias del apagado para poder testear el orden.
+// Wait debe respetar el contexto para que una señal de apagado corte el drenaje.
 type ShutdownHooks struct {
 	Deregister func(context.Context) error
-	Wait       func(time.Duration)
+	Wait       func(context.Context, time.Duration) bool
 	Shutdown   func(context.Context) error
 	Disconnect func(context.Context) error
 }
@@ -177,9 +182,9 @@ func GracefulShutdown(ctx context.Context, drain time.Duration, hooks ShutdownHo
 
 	wait := hooks.Wait
 	if wait == nil {
-		wait = time.Sleep
+		wait = waitFor
 	}
-	wait(drain)
+	wait(ctx, drain)
 
 	if hooks.Shutdown != nil {
 		if err := hooks.Shutdown(ctx); err != nil {
@@ -187,7 +192,9 @@ func GracefulShutdown(ctx context.Context, drain time.Duration, hooks ShutdownHo
 		}
 	}
 	if hooks.Disconnect != nil {
-		if err := hooks.Disconnect(ctx); err != nil {
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), DefaultDisconnectTimeout)
+		defer cancel()
+		if err := hooks.Disconnect(disconnectCtx); err != nil {
 			errs = append(errs, fmt.Errorf("cerrar MongoDB: %w", err))
 		}
 	}

@@ -220,8 +220,9 @@ func TestGracefulShutdown_DeregistersWaitsThenCloses(t *testing.T) {
 			calls = append(calls, "deregister")
 			return nil
 		},
-		Wait: func(d time.Duration) {
+		Wait: func(_ context.Context, d time.Duration) bool {
 			calls = append(calls, "wait:"+d.String())
+			return true
 		},
 		Shutdown: func(context.Context) error {
 			calls = append(calls, "shutdown")
@@ -242,6 +243,59 @@ func TestGracefulShutdown_DeregistersWaitsThenCloses(t *testing.T) {
 	}
 }
 
+func TestGracefulShutdown_CancelsDrainAndKeepsDisconnectContextAlive(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const drainWait = time.Second
+
+	deregistered := make(chan struct{})
+	disconnectCtxErr := make(chan error, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		done <- GracefulShutdown(ctx, drainWait, ShutdownHooks{
+			Deregister: func(context.Context) error {
+				close(deregistered)
+				return nil
+			},
+			Shutdown: func(context.Context) error { return nil },
+			Disconnect: func(ctx context.Context) error {
+				disconnectCtxErr <- ctx.Err()
+				return nil
+			},
+		})
+	}()
+
+	<-deregistered
+	time.Sleep(20 * time.Millisecond)
+	start := time.Now()
+	cancel()
+
+	var shutdownErr error
+	select {
+	case shutdownErr = <-done:
+	case <-time.After(drainWait + time.Second):
+		t.Fatal("GracefulShutdown() no terminó")
+	}
+
+	if shutdownErr != nil {
+		t.Fatalf("GracefulShutdown() error inesperado: %v", shutdownErr)
+	}
+	if elapsed := time.Since(start); elapsed >= drainWait/2 {
+		t.Errorf("drain tardó %v, want menos de %v", elapsed, drainWait/2)
+	}
+
+	select {
+	case err := <-disconnectCtxErr:
+		if err != nil {
+			t.Errorf("Disconnect recibió ctx.Err() = %v, want nil", err)
+		}
+	default:
+		t.Error("Disconnect no fue invocado")
+	}
+}
+
 func TestGracefulShutdown_ContinuesAndReportsErrors(t *testing.T) {
 	errDeregister := errors.New("Consul caído")
 	errShutdown := errors.New("shutdown falló")
@@ -252,8 +306,9 @@ func TestGracefulShutdown_ContinuesAndReportsErrors(t *testing.T) {
 			calls = append(calls, "deregister")
 			return errDeregister
 		},
-		Wait: func(time.Duration) {
+		Wait: func(context.Context, time.Duration) bool {
 			calls = append(calls, "wait")
+			return true
 		},
 		Shutdown: func(context.Context) error {
 			calls = append(calls, "shutdown")

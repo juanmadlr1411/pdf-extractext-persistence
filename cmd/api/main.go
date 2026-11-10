@@ -109,7 +109,9 @@ func main() {
 	<-ctx.Done()
 	slog.Info("apagando el servidor...")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	// Presupuesto total bajo stop_grace_period: 20s de Docker:
+	// deregister <=5s + drain 5s + HTTP shutdown + 3s de Mongo aislado = 18s máximo.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	deregister := func(context.Context) error { return nil }
@@ -125,7 +127,6 @@ func main() {
 
 	if err := consul.GracefulShutdown(shutdownCtx, consul.DefaultDrainDelay, consul.ShutdownHooks{
 		Deregister: deregister,
-		Wait:       time.Sleep,
 		Shutdown:   httpServer.Shutdown,
 		Disconnect: mongoClient.Disconnect,
 	}); err != nil {
