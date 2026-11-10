@@ -111,9 +111,13 @@ func wrapAsDependencyUnavailable(err error) error {
 	return fmt.Errorf("%w: %w", service.ErrDependencyUnavailable, err)
 }
 
-// FindAll devuelve todos los documentos de la colección.
+// DefaultMaxListLimit acota el escaneo máximo de documentos para mitigar DoS y consumo excesivo de memoria.
+const DefaultMaxListLimit = 100
+
+// FindAll devuelve todos los documentos de la colección (hasta DefaultMaxListLimit).
 func (r *DocumentRepository) FindAll(ctx context.Context) ([]domain.Document, error) {
-	cursor, err := r.client.Collection().Find(ctx, bson.M{})
+	opts := options.Find().SetLimit(DefaultMaxListLimit)
+	cursor, err := r.client.Collection().Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return nil, translateMongoError(fmt.Errorf("no se pudieron listar los documentos: %w", err))
 	}
