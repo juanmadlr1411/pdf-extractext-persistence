@@ -32,8 +32,9 @@ func TestEnvExampleDocumentsRequiredVariables(t *testing.T) {
 func TestLocalComposeDisablesConsul(t *testing.T) {
 	content := readRepoFile(t, "docker-compose.yml")
 
-	if !strings.Contains(content, "CONSUL_ENABLED=false") {
-		t.Error("docker-compose.yml local debe declarar CONSUL_ENABLED=false")
+	if !strings.Contains(content, "CONSUL_ENABLED=false") &&
+		!strings.Contains(content, "CONSUL_ENABLED=${CONSUL_ENABLED:-false}") {
+		t.Error("docker-compose.yml local debe declarar CONSUL_ENABLED=false o su default parametrizado")
 	}
 }
 

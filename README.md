@@ -107,11 +107,29 @@ docker run -d --name mongo-test -p 27017:27017 mongo:8
 MONGO_URI="mongodb://localhost:27017" go run ./cmd/api
 ```
 
+El binario Go lee variables de entorno del proceso y no parsea `.env`. Si
+preferís usar el archivo, exportalo antes de arrancar:
+
+```bash
+set -a
+source .env
+set +a
+go run ./cmd/api
+```
+
 ### Opción 2 — Contra la infraestructura del equipo (docker-compose)
 
-El Mongo del compose **no publica el puerto al host**: solo Persistence accede
-a él. Por eso el servicio debe correr como contenedor en la red `data`, con
-las credenciales del `.env` de infraestructura:
+El `docker-compose.yml` de este repo publica MongoDB solo en loopback
+(`127.0.0.1:27017`) para desarrollo local. La URI interna del contenedor se
+toma de `COMPOSE_MONGO_URI`, con default `mongodb://mongo:27017`; así, el
+`MONGO_URI=mongodb://localhost:27017` de `.env` (pensado para `go run`) no
+afecta al compose. Para apuntar el compose a otra URI, definí
+`COMPOSE_MONGO_URI`.
+
+El Mongo del compose de infraestructura **no publica el puerto al host**: solo
+Persistence accede a él por la red `data`. Por eso, para usar la infraestructura
+del equipo, el servicio debe correr como contenedor en la red `data`, con las
+credenciales del `.env` de infraestructura:
 
 ```bash
 # 1. Desde el repo infrastructure

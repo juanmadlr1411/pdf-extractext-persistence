@@ -2,18 +2,18 @@ services:
   mongo:
     image: mongo:8
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
 
   pdf-extractext-persistence:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8002:8002"
+      - "${APP_PORT:-8002}:${APP_PORT:-8002}"
     environment:
-      - APP_ENV=local
-      - APP_PORT=8002
-      - MONGO_URI=mongodb://mongo:27017
-      - CONSUL_ENABLED=false
+      - APP_ENV=${APP_ENV:-local}
+      - APP_PORT=${APP_PORT:-8002}
+      - MONGO_URI=${COMPOSE_MONGO_URI:-mongodb://mongo:27017}
+      - CONSUL_ENABLED=${CONSUL_ENABLED:-false}
     depends_on:
       - mongo
