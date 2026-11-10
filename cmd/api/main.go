@@ -23,6 +23,17 @@ var (
 	commit  = "unknown"
 )
 
+const (
+	kvFetchTimeout      = 5 * time.Second
+	mongoConnectTimeout = 10 * time.Second
+	shutdownTimeout     = 15 * time.Second
+
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 10 * time.Second
+	writeTimeout      = 15 * time.Second
+	idleTimeout       = 120 * time.Second
+)
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -37,7 +48,7 @@ func main() {
 	if cfg.ConsulEnabled {
 		consulClient = consul.NewClient(cfg.ConsulHTTPAddr, cfg.ConsulHTTPToken)
 
-		kvCtx, cancelKV := context.WithTimeout(ctx, 5*time.Second)
+		kvCtx, cancelKV := context.WithTimeout(ctx, kvFetchTimeout)
 		values, err := consul.FetchKVConfig(kvCtx, consulClient, consul.PersistenceConfigPrefix)
 		cancelKV()
 		if err != nil {
@@ -51,7 +62,7 @@ func main() {
 	// Fail-fast: sin conexión ni índice único garantizado, el servicio no arranca.
 	mongoClient := mongo.New(cfg.MongoURI, cfg.MongoDatabase, cfg.MongoCollection)
 
-	connectCtx, connectCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	connectCtx, connectCancel := context.WithTimeout(context.Background(), mongoConnectTimeout)
 	defer connectCancel()
 	if err := mongoClient.Connect(connectCtx); err != nil {
 		slog.Error("no se pudo conectar a MongoDB", "error", err)
@@ -69,10 +80,10 @@ func main() {
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           api.NewRouter(cfg, docService, mongoClient),
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	slog.Info("servicio iniciado", "service", cfg.AppName, "env", cfg.Environment, "port", cfg.Port)
@@ -102,7 +113,7 @@ func main() {
 
 	shutdown := func() error {
 		// Deregister, drenaje y HTTP comparten este contexto; Mongo usa 3s propios.
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
 		deregister := func(context.Context) error { return nil }
@@ -129,9 +140,7 @@ func main() {
 	slog.Info("servidor detenido correctamente")
 }
 
-// runService espera una señal del sistema o un fallo del servidor y ejecuta el
-// apagado ordenado. Devuelve el exit code para que main() no llame a os.Exit
-// desde una goroutine, lo que saltaría el cierre de recursos.
+// runService devuelve el exit code para que main() no llame a os.Exit desde una goroutine.
 func runService(ctx context.Context, serve func() error, shutdown func() error) int {
 	// Canal con buffer 1: la goroutine nunca se bloquea si el apagado ya comenzó.
 	serverErr := make(chan error, 1)
