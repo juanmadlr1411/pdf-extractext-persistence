@@ -20,17 +20,18 @@ import (
 // Guarda documentos indexados por ID y cuenta llamadas para verificar
 // que la capa API corta los errores antes de tocar persistencia.
 type fakeDocumentRepository struct {
-	docs        []domain.Document
-	byID        map[string]domain.Document
-	saveCalls   int
-	findCalls   int // cuenta FindAll + FindByID
-	updateCalls int
-	deleteCalls int
-	saveErr     error
-	listErr     error
-	getByIDErr  error
-	updateErr   error
-	deleteErr   error
+	docs             []domain.Document
+	byID             map[string]domain.Document
+	saveCalls        int
+	findCalls        int // cuenta FindAll + FindByID
+	updateCalls      int
+	deleteCalls      int
+	saveErr          error
+	listErr          error
+	getByIDErr       error
+	getByChecksumErr error
+	updateErr        error
+	deleteErr        error
 }
 
 func newFakeDocumentRepository() *fakeDocumentRepository {
@@ -70,6 +71,19 @@ func (f *fakeDocumentRepository) FindByID(_ context.Context, id string) (domain.
 		return domain.Document{}, service.ErrDocumentNotFound
 	}
 	return doc, nil
+}
+
+func (f *fakeDocumentRepository) FindByChecksum(_ context.Context, checksum string) (domain.Document, error) {
+	f.findCalls++
+	if f.getByChecksumErr != nil {
+		return domain.Document{}, f.getByChecksumErr
+	}
+	for _, doc := range f.byID {
+		if doc.Checksum == checksum {
+			return doc, nil
+		}
+	}
+	return domain.Document{}, service.ErrDocumentNotFound
 }
 
 func (f *fakeDocumentRepository) UpdateFilename(_ context.Context, id, filename string) (domain.Document, error) {
@@ -345,6 +359,78 @@ func TestGetDocumentByID_Found_Returns200WithDocument(t *testing.T) {
 	if repo.findCalls != 1 {
 		t.Errorf("esperada 1 llamada al repositorio, obtenidas %d", repo.findCalls)
 	}
+}
+
+// --- Tests de GET /documents/by-checksum/{checksum} ---
+
+const testChecksum = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+
+func TestGetDocumentByChecksum_InvalidChecksum_Returns400(t *testing.T) {
+	repo := newFakeDocumentRepository()
+	router := newTestRouter(repo)
+
+	rec := doRequest(t, router, http.MethodGet, "/documents/by-checksum/no-es-sha256", "")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("esperado status 400, obtenido %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	assertProblem(t, rec, "INVALID_REQUEST")
+	if repo.findCalls != 0 {
+		t.Errorf("fail-fast violado: el repositorio recibió %d llamadas", repo.findCalls)
+	}
+}
+
+func TestGetDocumentByChecksum_NotFound_Returns404(t *testing.T) {
+	repo := newFakeDocumentRepository()
+	router := newTestRouter(repo)
+
+	rec := doRequest(t, router, http.MethodGet, "/documents/by-checksum/"+testChecksum, "")
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("esperado status 404, obtenido %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	assertProblem(t, rec, "NOT_FOUND")
+	if repo.findCalls != 1 {
+		t.Errorf("esperada 1 llamada al repositorio, obtenidas %d", repo.findCalls)
+	}
+}
+
+func TestGetDocumentByChecksum_Found_Returns200WithDocument(t *testing.T) {
+	want := domain.Document{
+		ID:            "507f1f77bcf86cd799439011",
+		Filename:      "informe.pdf",
+		ExtractedText: "texto extraído",
+		Checksum:      testChecksum,
+	}
+	repo := newFakeDocumentRepository()
+	repo.byID[want.ID] = want
+	router := newTestRouter(repo)
+
+	rec := doRequest(t, router, http.MethodGet, "/documents/by-checksum/"+want.Checksum, "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("esperado status 200, obtenido %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	body := decodeBody(t, rec)
+	if len(body) != 4 {
+		t.Fatalf("esperados exactamente 4 campos, obtenidos %d: %v", len(body), body)
+	}
+	if body["id"] != want.ID || body["checksum"] != want.Checksum {
+		t.Errorf("documento inesperado: %v", body)
+	}
+}
+
+func TestGetDocumentByChecksum_DependencyUnavailable_Returns503(t *testing.T) {
+	repo := newFakeDocumentRepository()
+	repo.getByChecksumErr = service.ErrDependencyUnavailable
+	router := newTestRouter(repo)
+
+	rec := doRequest(t, router, http.MethodGet, "/documents/by-checksum/"+testChecksum, "")
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("esperado status 503, obtenido %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	assertProblem(t, rec, "DEPENDENCY_UNAVAILABLE")
 }
 
 func TestListDocuments_DependencyUnavailable_Returns503_API(t *testing.T) {

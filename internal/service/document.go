@@ -8,7 +8,6 @@ import (
 	"github.com/pdf-extractext/persistence/internal/domain"
 )
 
-
 var ErrDocumentNotFound = errors.New("documento no encontrado")
 
 var ErrFilenameTooLong = errors.New("el filename supera el máximo de 100 caracteres")
@@ -24,6 +23,7 @@ type DocumentRepository interface {
 	Save(ctx context.Context, doc domain.Document) (domain.Document, error)
 	FindAll(ctx context.Context) ([]domain.Document, error)
 	FindByID(ctx context.Context, id string) (domain.Document, error)
+	FindByChecksum(ctx context.Context, checksum string) (domain.Document, error)
 	UpdateFilename(ctx context.Context, id, filename string) (domain.Document, error)
 	DeleteByID(ctx context.Context, id string) error
 }
@@ -58,6 +58,11 @@ func (s *DocumentService) List(ctx context.Context) ([]domain.Document, error) {
 // GetByID devuelve el documento con el ID dado o ErrDocumentNotFound.
 func (s *DocumentService) GetByID(ctx context.Context, id string) (domain.Document, error) {
 	return s.repo.FindByID(ctx, id)
+}
+
+// GetByChecksum devuelve el documento con el checksum dado o ErrDocumentNotFound.
+func (s *DocumentService) GetByChecksum(ctx context.Context, checksum string) (domain.Document, error) {
+	return s.repo.FindByChecksum(ctx, checksum)
 }
 
 // UpdateFilename renombra el documento revalidando los invariantes.

@@ -15,6 +15,9 @@ import (
 // objectIDRegex valida el formato de un ObjectId de Mongo (24 hex minúsculas).
 var objectIDRegex = regexp.MustCompile(`^[0-9a-f]{24}$`)
 
+// checksumRegex valida el contrato real del extractor: SHA-256 hexadecimal.
+var checksumRegex = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
 func extractValidObjectID(w http.ResponseWriter, r *http.Request) (string, bool) {
 	id := chi.URLParam(r, "id")
 	if !objectIDRegex.MatchString(id) {
@@ -22,6 +25,15 @@ func extractValidObjectID(w http.ResponseWriter, r *http.Request) (string, bool)
 		return "", false
 	}
 	return id, true
+}
+
+func extractValidChecksum(w http.ResponseWriter, r *http.Request) (string, bool) {
+	checksum := chi.URLParam(r, "checksum")
+	if !checksumRegex.MatchString(checksum) {
+		respondError(w, codeInvalidRequest, "el checksum debe ser SHA-256 hexadecimal de 64 caracteres", http.StatusBadRequest)
+		return "", false
+	}
+	return checksum, true
 }
 
 // createDocumentRequest es el payload de entrada del endpoint POST /documents.
@@ -142,6 +154,33 @@ func getDocumentByIDHandler(svc *service.DocumentService) http.HandlerFunc {
 		}
 		if err != nil {
 			respondError(w, codeInternalError, "no se pudo obtener el documento", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, toResponse(doc))
+	}
+}
+
+// getDocumentByChecksumHandler maneja GET /documents/by-checksum/{checksum}.
+// Permite a la API resolver la cache anti-duplicados antes de extraer.
+func getDocumentByChecksumHandler(svc *service.DocumentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		checksum, ok := extractValidChecksum(w, r)
+		if !ok {
+			return
+		}
+
+		doc, err := svc.GetByChecksum(r.Context(), checksum)
+		if errors.Is(err, service.ErrDocumentNotFound) {
+			respondError(w, codeNotFound, "documento no encontrado", http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrDependencyUnavailable) {
+			respondError(w, codeDependencyUnavailable, "un servicio dependiente no está disponible, inténtelo más tarde", http.StatusServiceUnavailable)
+			return
+		}
+		if err != nil {
+			respondError(w, codeInternalError, "no se pudo obtener el documento por checksum", http.StatusInternalServerError)
 			return
 		}
 

@@ -12,6 +12,7 @@ type fakeRepo struct {
 	saveFn           func(context.Context, domain.Document) (domain.Document, error)
 	findAllFn        func(context.Context) ([]domain.Document, error)
 	findByIDFn       func(context.Context, string) (domain.Document, error)
+	findByChecksumFn func(context.Context, string) (domain.Document, error)
 	updateFilenameFn func(context.Context, string, string) (domain.Document, error)
 	deleteByIDFn     func(context.Context, string) error
 
@@ -36,6 +37,13 @@ func (f *fakeRepo) FindAll(ctx context.Context) ([]domain.Document, error) {
 func (f *fakeRepo) FindByID(ctx context.Context, id string) (domain.Document, error) {
 	if f.findByIDFn != nil {
 		return f.findByIDFn(ctx, id)
+	}
+	return domain.Document{}, ErrDocumentNotFound
+}
+
+func (f *fakeRepo) FindByChecksum(ctx context.Context, checksum string) (domain.Document, error) {
+	if f.findByChecksumFn != nil {
+		return f.findByChecksumFn(ctx, checksum)
 	}
 	return domain.Document{}, ErrDocumentNotFound
 }
@@ -313,6 +321,29 @@ func TestGetByID_SuccessAndPropagatesErrors(t *testing.T) {
 			t.Fatalf("esperado ErrDocumentNotFound, obtenido %v", err)
 		}
 	})
+}
+
+func TestGetByChecksum_SuccessAndPropagatesErrors(t *testing.T) {
+	t.Parallel()
+
+	want := domain.Document{ID: "507f1f77bcf86cd799439011", Filename: "a.pdf", Checksum: "abc123"}
+	repo := &fakeRepo{
+		findByChecksumFn: func(ctx context.Context, checksum string) (domain.Document, error) {
+			if checksum != want.Checksum {
+				t.Fatalf("checksum incorrecto: %s", checksum)
+			}
+			return want, nil
+		},
+	}
+	svc := NewDocumentService(repo)
+
+	got, err := svc.GetByChecksum(context.Background(), want.Checksum)
+	if err != nil {
+		t.Fatalf("GetByChecksum no debería fallar: %v", err)
+	}
+	if got != want {
+		t.Fatalf("resultado incorrecto: got %+v want %+v", got, want)
+	}
 }
 
 func TestDelete_SuccessAndPropagatesErrors(t *testing.T) {

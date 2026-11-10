@@ -160,6 +160,24 @@ func (r *DocumentRepository) FindByID(ctx context.Context, id string) (domain.Do
 	return documentFromBSON(documentBSON), nil
 }
 
+// FindByChecksum devuelve el documento que posee el checksum único indicado.
+// El handler valida el formato; el índice checksum_1 hace la lectura O(log n).
+func (r *DocumentRepository) FindByChecksum(ctx context.Context, checksum string) (domain.Document, error) {
+	findResult := r.client.Collection().FindOne(ctx, bson.M{"checksum": checksum})
+	if errors.Is(findResult.Err(), mongo.ErrNoDocuments) {
+		return domain.Document{}, service.ErrDocumentNotFound
+	}
+	if findResult.Err() != nil {
+		return domain.Document{}, translateMongoError(fmt.Errorf("no se pudo obtener el documento por checksum: %w", findResult.Err()))
+	}
+
+	var documentBSON bson.M
+	if err := findResult.Decode(&documentBSON); err != nil {
+		return domain.Document{}, translateMongoError(fmt.Errorf("no se pudo decodificar el documento por checksum: %w", err))
+	}
+	return documentFromBSON(documentBSON), nil
+}
+
 // UpdateFilename renombra el documento y devuelve su estado actualizado,
 // o ErrDocumentNotFound si el ID no existe.
 func (r *DocumentRepository) UpdateFilename(ctx context.Context, id, filename string) (domain.Document, error) {

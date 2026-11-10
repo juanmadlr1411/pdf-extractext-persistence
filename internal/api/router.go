@@ -25,6 +25,7 @@ func NewRouter(cfg config.Config, docService *service.DocumentService, healthChe
 
 	r.Post("/documents", createDocumentHandler(docService))
 	r.Get("/documents", listDocumentsHandler(docService))
+	r.Get("/documents/by-checksum/{checksum}", getDocumentByChecksumHandler(docService))
 	r.Get("/documents/{id}", getDocumentByIDHandler(docService))
 	r.Patch("/documents/{id}", patchDocumentHandler(docService))
 	r.Delete("/documents/{id}", deleteDocumentHandler(docService))

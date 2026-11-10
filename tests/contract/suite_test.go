@@ -111,6 +111,20 @@ func (s *contractStore) FindByID(_ context.Context, id string) (domain.Document,
 	return doc, nil
 }
 
+// FindByChecksum devuelve el documento o ErrDocumentNotFound si no existe.
+func (s *contractStore) FindByChecksum(_ context.Context, checksum string) (domain.Document, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.unavailable {
+		return domain.Document{}, fmt.Errorf("no se pudo obtener el documento: %w", service.ErrDependencyUnavailable)
+	}
+	id, ok := s.checksumIdx[checksum]
+	if !ok {
+		return domain.Document{}, service.ErrDocumentNotFound
+	}
+	return s.byID[id], nil
+}
+
 // UpdateFilename renombra o devuelve ErrDocumentNotFound si el ID no existe.
 func (s *contractStore) UpdateFilename(_ context.Context, id, filename string) (domain.Document, error) {
 	s.mu.Lock()
