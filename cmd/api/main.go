@@ -75,13 +75,7 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	go func() {
-		slog.Info("servicio iniciado", "service", cfg.AppName, "env", cfg.Environment, "port", cfg.Port)
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("error al levantar el servidor", "error", err)
-			os.Exit(1)
-		}
-	}()
+	slog.Info("servicio iniciado", "service", cfg.AppName, "env", cfg.Environment, "port", cfg.Port)
 
 	var serviceID string
 	if cfg.ConsulEnabled {
@@ -106,32 +100,62 @@ func main() {
 		}
 	}
 
-	<-ctx.Done()
-	slog.Info("apagando el servidor...")
+	shutdown := func() error {
+		// Presupuesto total bajo stop_grace_period: 20s de Docker:
+		// deregister <=5s + drain 5s + HTTP shutdown + 3s de Mongo aislado = 18s máximo.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
 
-	// Presupuesto total bajo stop_grace_period: 20s de Docker:
-	// deregister <=5s + drain 5s + HTTP shutdown + 3s de Mongo aislado = 18s máximo.
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	deregister := func(context.Context) error { return nil }
-	if consulClient != nil && serviceID != "" {
-		deregister = func(shutdownCtx context.Context) error {
-			if err := consulClient.Deregister(shutdownCtx, serviceID); err != nil {
-				return err
+		deregister := func(context.Context) error { return nil }
+		if consulClient != nil && serviceID != "" {
+			deregister = func(shutdownCtx context.Context) error {
+				if err := consulClient.Deregister(shutdownCtx, serviceID); err != nil {
+					return err
+				}
+				slog.Info("servicio deregistrado de Consul", "id", serviceID)
+				return nil
 			}
-			slog.Info("servicio deregistrado de Consul", "id", serviceID)
-			return nil
 		}
+
+		return consul.GracefulShutdown(shutdownCtx, consul.DefaultDrainDelay, consul.ShutdownHooks{
+			Deregister: deregister,
+			Shutdown:   httpServer.Shutdown,
+			Disconnect: mongoClient.Disconnect,
+		})
 	}
 
-	if err := consul.GracefulShutdown(shutdownCtx, consul.DefaultDrainDelay, consul.ShutdownHooks{
-		Deregister: deregister,
-		Shutdown:   httpServer.Shutdown,
-		Disconnect: mongoClient.Disconnect,
-	}); err != nil {
-		slog.Error("error durante el apagado", "error", err)
-		os.Exit(1)
+	if exitCode := runService(ctx, httpServer.ListenAndServe, shutdown); exitCode != 0 {
+		os.Exit(exitCode)
 	}
 	slog.Info("servidor detenido correctamente")
+}
+
+// runService espera una señal del sistema o un fallo del servidor y ejecuta el
+// apagado ordenado. Devuelve el exit code para que main() no llame a os.Exit
+// desde una goroutine, lo que saltaría el cierre de recursos.
+func runService(ctx context.Context, serve func() error, shutdown func() error) int {
+	// Canal con buffer 1: la goroutine nunca se bloquea si el apagado ya comenzó.
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+	}()
+
+	exitCode := 0
+	select {
+	case <-ctx.Done():
+		slog.Info("apagando el servidor...")
+	case err := <-serverErr:
+		slog.Error("error al levantar el servidor", "error", err)
+		exitCode = 1
+	}
+
+	// Ambos caminos convergen aquí: un fallo del servidor también debe
+	// deregistrar Consul y cerrar MongoDB antes de salir.
+	if err := shutdown(); err != nil {
+		slog.Error("error durante el apagado", "error", err)
+		exitCode = 1
+	}
+	return exitCode
 }
