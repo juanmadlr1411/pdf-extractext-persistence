@@ -11,10 +11,6 @@
   ],
   "Meta": {
     "commit": "abc123",
-    "traefik.enable": "true",
-    "traefik.http.routers.persistence.entrypoints": "internal",
-    "traefik.http.routers.persistence.rule": "Host(`persistence.pdf-extractext.localhost`)",
-    "traefik.http.services.persistence.loadbalancer.server.port": "8002",
     "version": "1.0.0"
   },
   "Check": {

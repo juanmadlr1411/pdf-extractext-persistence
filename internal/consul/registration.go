@@ -110,12 +110,8 @@ func BuildRegistration(in RegistrationInput) ServiceRegistration {
 			servicePortKey + "=" + portText,
 		},
 		Meta: map[string]string{
-			"traefik.enable":        "true",
-			router + ".rule":        rule,
-			router + ".entrypoints": "internal",
-			servicePortKey:          portText,
-			"version":               in.Version,
-			"commit":                in.Commit,
+			"version": in.Version,
+			"commit":  in.Commit,
 		},
 		Check: HealthCheck{
 			HTTP:                           fmt.Sprintf("http://%s:%d%s", in.Address, port, healthPath),
