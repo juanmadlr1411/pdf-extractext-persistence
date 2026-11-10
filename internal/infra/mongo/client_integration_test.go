@@ -21,9 +21,7 @@ const (
 	testCollection = "pdf_documents_test"
 )
 
-// mongoImage permite sobreescribir la imagen de test (MONGO_TEST_IMAGE).
-// Por defecto se mantiene el pin del equipo: mongo:8. El override es útil
-// en CPUs sin AVX, donde MongoDB 5.0+ no arranca.
+// Permite sobreescribir la imagen de test con MONGO_TEST_IMAGE (por defecto mongo:8).
 func mongoImage() string {
 	if img := os.Getenv("MONGO_TEST_IMAGE"); img != "" {
 		return img
@@ -31,9 +29,7 @@ func mongoImage() string {
 	return "mongo:8"
 }
 
-// startMongoContainer levanta el contenedor y devuelve su handle además del
-// connection string: el llamador puede terminar el contenedor en vivo para
-// simular la caída de la dependencia.
+// Levanta el contenedor y devuelve su handle y el connection string.
 func startMongoContainer(t *testing.T) (*mongodb.MongoDBContainer, string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -56,7 +52,6 @@ func startMongoContainer(t *testing.T) (*mongodb.MongoDBContainer, string) {
 	return container, uri
 }
 
-// startMongo levanta el contenedor y devuelve solo el connection string.
 func startMongo(t *testing.T) string {
 	t.Helper()
 	_, uri := startMongoContainer(t)

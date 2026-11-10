@@ -13,13 +13,6 @@ import (
 	"github.com/pdf-extractext/persistence/internal/service"
 )
 
-// Requiere Docker: verifica DocumentRepository contra un MongoDB real
-// (testcontainers), cubriendo la cadena real del POST, los contratos
-// 409/503 (checksum duplicado con documento existente completo y caída
-// de la dependencia en vivo) y el probe de readiness.
-
-// connectRepository conecta el cliente, garantiza el índice único de checksum
-// y registra su desconexión al finalizar el test.
 func connectRepository(t *testing.T, client *mongo.Client) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -37,7 +30,6 @@ func connectRepository(t *testing.T, client *mongo.Client) {
 	})
 }
 
-// newConnectedRepo levanta Mongo, conecta el cliente y devuelve el repositorio listo.
 func newConnectedRepo(t *testing.T) *mongo.DocumentRepository {
 	t.Helper()
 	client := mongo.New(startMongo(t), testDB, testCollection)
@@ -45,8 +37,6 @@ func newConnectedRepo(t *testing.T) *mongo.DocumentRepository {
 	return mongo.NewDocumentRepository(client)
 }
 
-// TestDocumentRepository_Check_PingsRealMongo verifica que el probe de
-// readiness (HealthChecker) responde correctamente contra Mongo real.
 func TestDocumentRepository_Check_PingsRealMongo(t *testing.T) {
 	uri := startMongo(t)
 	client := mongo.New(uri, testDB, testCollection)
@@ -71,8 +61,6 @@ func TestDocumentRepository_Check_PingsRealMongo(t *testing.T) {
 	}
 }
 
-// TestDocumentRepository_Save_PersisteYDevuelveDocumentoConID simula el flujo
-// end-to-end del POST: persiste un documento con sus 4 campos contra Mongo real.
 func TestDocumentRepository_Save_PersisteYDevuelveDocumentoConID(t *testing.T) {
 	client := mongo.New(startMongo(t), testDB, testCollection)
 	connectRepository(t, client)
@@ -94,8 +82,6 @@ func TestDocumentRepository_Save_PersisteYDevuelveDocumentoConID(t *testing.T) {
 	}
 }
 
-// TestDocumentRepository_SaveAndFindByID verifica el ciclo completo:
-// persistir y recuperar por ID contra Mongo real.
 func TestDocumentRepository_SaveAndFindByID(t *testing.T) {
 	repo := newConnectedRepo(t)
 
@@ -134,8 +120,6 @@ func TestDocumentRepository_SaveAndFindByID(t *testing.T) {
 	}
 }
 
-// TestDocumentRepository_FindAll_ReturnsSavedDocuments verifica la lectura
-// de la lista completa contra Mongo real.
 func TestDocumentRepository_FindAll_ReturnsSavedDocuments(t *testing.T) {
 	repo := newConnectedRepo(t)
 
@@ -162,8 +146,6 @@ func TestDocumentRepository_FindAll_ReturnsSavedDocuments(t *testing.T) {
 	}
 }
 
-// TestDocumentRepository_FindByID_NotFound verifica que el repositorio mapea
-// correctamente el caso "no existe" al error centinela del dominio.
 func TestDocumentRepository_FindByID_NotFound(t *testing.T) {
 	repo := newConnectedRepo(t)
 
@@ -176,9 +158,6 @@ func TestDocumentRepository_FindByID_NotFound(t *testing.T) {
 	}
 }
 
-// TestDocumentRepository_Save_ChecksumDuplicadoDevuelveDocumentoExistente
-// verifica el contrato 409: clave duplicada -> DuplicateChecksumError con
-// el documento existente completo.
 func TestDocumentRepository_Save_ChecksumDuplicadoDevuelveDocumentoExistente(t *testing.T) {
 	client := mongo.New(startMongo(t), testDB, testCollection)
 	connectRepository(t, client)
@@ -218,8 +197,6 @@ func TestDocumentRepository_Save_ChecksumDuplicadoDevuelveDocumentoExistente(t *
 	}
 }
 
-// TestDocumentRepository_Save_MongoCaidoDevuelveIndisponibilidad verifica el
-// contrato 503: con la dependencia caída, Save devuelve ErrDependencyUnavailable.
 func TestDocumentRepository_Save_MongoCaidoDevuelveIndisponibilidad(t *testing.T) {
 	container, uri := startMongoContainer(t)
 	client := mongo.New(uri, testDB, testCollection)
@@ -247,8 +224,6 @@ func TestDocumentRepository_Save_MongoCaidoDevuelveIndisponibilidad(t *testing.T
 	}
 }
 
-// TestDocumentRepository_UpdateFilename_ActualizaSoloFilenameConservandoCampos verifica
-// que UpdateFilename actualiza únicamente el filename y conserva ID, extracted_text y checksum.
 func TestDocumentRepository_UpdateFilename_ActualizaSoloFilenameConservandoCampos(t *testing.T) {
 	repo := newConnectedRepo(t)
 
@@ -293,8 +268,6 @@ func TestDocumentRepository_UpdateFilename_ActualizaSoloFilenameConservandoCampo
 	}
 }
 
-// TestDocumentRepository_UpdateFilename_NotFoundDevuelveErrDocumentNotFound verifica
-// que con un ID válido pero inexistente devuelve service.ErrDocumentNotFound.
 func TestDocumentRepository_UpdateFilename_NotFoundDevuelveErrDocumentNotFound(t *testing.T) {
 	repo := newConnectedRepo(t)
 
@@ -307,8 +280,6 @@ func TestDocumentRepository_UpdateFilename_NotFoundDevuelveErrDocumentNotFound(t
 	}
 }
 
-// TestDocumentRepository_DeleteByID_ExitoEIdempotenciaPorAusencia verifica
-// eliminación exitosa, desaparición del documento y idempotencia por ausencia (404-like).
 func TestDocumentRepository_DeleteByID_ExitoEIdempotenciaPorAusencia(t *testing.T) {
 	repo := newConnectedRepo(t)
 
@@ -336,4 +307,3 @@ func TestDocumentRepository_DeleteByID_ExitoEIdempotenciaPorAusencia(t *testing.
 		t.Fatalf("segunda llamada a DeleteByID debería devolver ErrDocumentNotFound, obtenido: %v", err)
 	}
 }
-

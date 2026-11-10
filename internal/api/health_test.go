@@ -12,8 +12,6 @@ import (
 	"github.com/pdf-extractext/persistence/internal/service"
 )
 
-// fakeHealthChecker implementa la interfaz service.HealthChecker
-// para simular el estado de una dependencia (Mongo) en tests.
 type fakeHealthChecker struct {
 	healthy bool
 }
@@ -25,13 +23,9 @@ func (f *fakeHealthChecker) Check(_ context.Context) error {
 	return errors.New("fake dependency is unhealthy")
 }
 
-// newHealthTestRouter construye el router para tests de health checks.
-// docService y healthChecker pueden controlarse por caso de prueba.
 func newHealthTestRouter(cfg config.Config, docService *service.DocumentService, healthChecker service.HealthChecker) http.Handler {
 	return NewRouter(cfg, docService, healthChecker)
 }
-
-// --- Test de liveness: GET /health ---
 
 func TestHealth_Returns200WithOKStatus(t *testing.T) {
 	cfg := config.Config{AppName: "pdf-extractext-persistence", Environment: "local"}
@@ -64,12 +58,9 @@ func TestHealth_Returns200WithOKStatus(t *testing.T) {
 	}
 }
 
-// --- Tests de readiness ---
-
-// Caso 1: GET /health/ready con dependencia OK -> 200 OK.
 func TestReadiness_MongoOK_Returns200(t *testing.T) {
 	cfg := config.Config{AppName: "pdf-extractext-persistence", Environment: "local"}
-	fakeChecker := &fakeHealthChecker{healthy: true} // Simula Mongo OK
+	fakeChecker := &fakeHealthChecker{healthy: true}
 
 	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
 	rec := httptest.NewRecorder()
@@ -92,10 +83,9 @@ func TestReadiness_MongoOK_Returns200(t *testing.T) {
 	}
 }
 
-// Caso 2: GET /health/ready con dependencia caída -> 503 DEPENDENCY_UNAVAILABLE.
 func TestReadiness_MongoDown_Returns503(t *testing.T) {
 	cfg := config.Config{AppName: "pdf-extractext-persistence", Environment: "local"}
-	fakeChecker := &fakeHealthChecker{healthy: false} // Simula Mongo caído
+	fakeChecker := &fakeHealthChecker{healthy: false}
 
 	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
 	rec := httptest.NewRecorder()

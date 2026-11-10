@@ -13,8 +13,6 @@ import (
 	"github.com/pdf-extractext/persistence/internal/service"
 )
 
-// TestTranslateError verifica que cada error de dominio/servicio se mapea a
-// su dupla contractual (status, code) del catálogo cerrado.
 func TestTranslateError(t *testing.T) {
 	t.Parallel()
 
@@ -55,8 +53,6 @@ func TestTranslateError(t *testing.T) {
 	}
 }
 
-// TestTranslateErrorFallback verifica que cualquier error genérico o no
-// clasificado cae al fallback INTERNAL_ERROR (500) sin filtrar detalles.
 func TestTranslateErrorFallback(t *testing.T) {
 	t.Parallel()
 
@@ -73,8 +69,6 @@ func TestTranslateErrorFallback(t *testing.T) {
 	}
 }
 
-// TestRespondErrorEnvelope verifica el helper respondError: problem RFC 9457
-// exacto {type, title, status, detail, code}, sin stacktraces ni detalle interno.
 func TestRespondErrorEnvelope(t *testing.T) {
 	t.Parallel()
 

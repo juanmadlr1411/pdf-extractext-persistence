@@ -9,8 +9,6 @@ import (
 	"github.com/pdf-extractext/persistence/internal/domain"
 )
 
-// --- Tests de PATCH /documents/{id} ---
-
 func seedDocument() domain.Document {
 	return domain.Document{
 		ID:            "507f1f77bcf86cd799439011",
@@ -20,7 +18,6 @@ func seedDocument() domain.Document {
 	}
 }
 
-// PATCH con filename válido -> 200 con el documento actualizado.
 func TestPatchDocument_RenamesDocument(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	repo.byID["507f1f77bcf86cd799439011"] = seedDocument()
@@ -61,7 +58,6 @@ func TestPatchDocument_RenamesDocument(t *testing.T) {
 	}
 }
 
-// PATCH al mismo valor es idempotente -> 200.
 func TestPatchDocument_SameValueIsIdempotent(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	repo.byID["507f1f77bcf86cd799439011"] = seedDocument()
@@ -78,8 +74,6 @@ func TestPatchDocument_SameValueIsIdempotent(t *testing.T) {
 	}
 }
 
-// Campos no mutables en el payload se ignoran: checksum y extracted_text
-// quedan intactos y la respuesta es 200.
 func TestPatchDocument_IgnoresImmutableFields(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	repo.byID["507f1f77bcf86cd799439011"] = seedDocument()
@@ -100,8 +94,6 @@ func TestPatchDocument_IgnoresImmutableFields(t *testing.T) {
 	}
 }
 
-// Rechazos 400: body ausente/vacío, JSON malformado, filename ausente o
-// vacío. Un rename sin filename es una petición sin intención válida.
 func TestPatchDocument_InvalidRequest_Returns400(t *testing.T) {
 	tests := []struct {
 		name string
@@ -133,7 +125,6 @@ func TestPatchDocument_InvalidRequest_Returns400(t *testing.T) {
 	}
 }
 
-// ID de formato inválido -> 400 fail-fast sin tocar el repositorio.
 func TestPatchDocument_InvalidID_Returns400(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	router := newTestRouter(repo)
@@ -150,7 +141,6 @@ func TestPatchDocument_InvalidID_Returns400(t *testing.T) {
 	}
 }
 
-// ID válido pero inexistente -> 404 NOT_FOUND.
 func TestPatchDocument_NotFound_Returns404(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	router := newTestRouter(repo)
@@ -164,7 +154,6 @@ func TestPatchDocument_NotFound_Returns404(t *testing.T) {
 	assertProblem(t, rec, "NOT_FOUND")
 }
 
-// Filename de 101 caracteres -> 422 FILENAME_TOO_LONG (validación en Service).
 func TestPatchDocument_FilenameTooLong_Returns422(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	repo.byID["507f1f77bcf86cd799439011"] = seedDocument()

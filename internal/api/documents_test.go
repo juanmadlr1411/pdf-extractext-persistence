@@ -16,9 +16,6 @@ import (
 	"github.com/pdf-extractext/persistence/internal/service"
 )
 
-// fakeDocumentRepository es un repositorio en memoria solo para tests de API.
-// Guarda documentos indexados por ID y cuenta llamadas para verificar
-// que la capa API corta los errores antes de tocar persistencia.
 type fakeDocumentRepository struct {
 	docs        []domain.Document
 	byID        map[string]domain.Document
@@ -109,8 +106,6 @@ func (f *fakeDocumentRepository) DeleteByID(_ context.Context, id string) error 
 	return nil
 }
 
-// --- helpers ---
-
 func newTestRouter(repo service.DocumentRepository) http.Handler {
 	cfg := config.Config{AppName: "pdf-extractext-persistence", Environment: "local"}
 	return NewRouter(cfg, service.NewDocumentService(repo), nil)
@@ -141,8 +136,6 @@ func decodeBody(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	}
 	return body
 }
-
-// --- Tests de POST /documents ---
 
 func TestCreateDocument_Returns201WithFourFields(t *testing.T) {
 	repo := newFakeDocumentRepository()
@@ -180,9 +173,6 @@ func TestCreateDocument_Returns201WithFourFields(t *testing.T) {
 	}
 }
 
-// --- Tests de GET /documents ---
-
-// Caso 1: GET /documents con repositorio vacío -> 200 y array JSON vacío.
 func TestListDocuments_EmptyRepo_ReturnsEmptyJSONArray(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	router := newTestRouter(repo)
@@ -208,7 +198,6 @@ func TestListDocuments_EmptyRepo_ReturnsEmptyJSONArray(t *testing.T) {
 	}
 }
 
-// Caso 2: GET /documents con N documentos -> 200 y array con los N documentos.
 func TestListDocuments_WithDocs_ReturnsAllDocuments(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	repo.docs = []domain.Document{
@@ -255,8 +244,6 @@ func TestListDocuments_WithDocs_ReturnsAllDocuments(t *testing.T) {
 	}
 }
 
-// Caso 3: GET /documents/{id} con ID de formato inválido -> 400 INVALID_REQUEST
-// y el repositorio NO debe ser tocado (fail-fast).
 func TestGetDocumentByID_InvalidID_Returns400(t *testing.T) {
 	invalidIDs := []string{
 		"no-es-un-objectid",
@@ -286,7 +273,6 @@ func TestGetDocumentByID_InvalidID_Returns400(t *testing.T) {
 	}
 }
 
-// Caso 4: GET /documents/{id} con ID válido pero inexistente -> 404 NOT_FOUND.
 func TestGetDocumentByID_NotFound_Returns404(t *testing.T) {
 	repo := newFakeDocumentRepository()
 	router := newTestRouter(repo)
@@ -298,13 +284,11 @@ func TestGetDocumentByID_NotFound_Returns404(t *testing.T) {
 	}
 	assertProblem(t, rec, "NOT_FOUND")
 
-	// El ID era válido: el repositorio SÍ debió ser consultado exactamente una vez.
 	if repo.findCalls != 1 {
 		t.Errorf("esperada 1 llamada al repositorio, obtenidas %d", repo.findCalls)
 	}
 }
 
-// Caso 5: GET /documents/{id} con ID válido y existente -> 200 con el documento exacto.
 func TestGetDocumentByID_Found_Returns200WithDocument(t *testing.T) {
 	want := domain.Document{
 		ID:            "507f1f77bcf86cd799439011",

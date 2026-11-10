@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-// Un fallo inesperado de ListenAndServe (distinto de ErrServerClosed) debe
-// disparar el apagado ordenado y terminar con código 1.
 func TestRunService_ShutsDownWhenServerFails(t *testing.T) {
 	cause := errors.New("puerto ocupado")
 	shutdownCalls := 0
@@ -36,7 +34,6 @@ func TestRunService_ShutsDownWhenServerFails(t *testing.T) {
 	}
 }
 
-// Una señal normal (SIGTERM/SIGINT) debe ejecutar el apagado y salir con 0.
 func TestRunService_ShutsDownOnSignal(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	shutdownCalls := 0
@@ -68,7 +65,6 @@ func TestRunService_ShutsDownOnSignal(t *testing.T) {
 	}
 }
 
-// Si el apagado ordenado falla, el proceso debe reportar código 1.
 func TestRunService_ReportsShutdownFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
