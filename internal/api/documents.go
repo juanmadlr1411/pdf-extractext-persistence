@@ -31,14 +31,11 @@ type createDocumentRequest struct {
 	Checksum      string `json:"checksum"`
 }
 
-// updateFilenameRequest es el payload de PATCH /documents/{id}.
 // Puntero para distinguir campo ausente/vacío (400) de un valor válido.
-// Cualquier campo extra (checksum, extracted_text) se ignora y no muta.
 type updateFilenameRequest struct {
 	Filename *string `json:"filename"`
 }
 
-// documentResponse es el contrato de salida: exactamente estos 4 campos.
 type documentResponse struct {
 	ID            string `json:"id"`
 	Filename      string `json:"filename"`
@@ -46,7 +43,6 @@ type documentResponse struct {
 	Checksum      string `json:"checksum"`
 }
 
-// toResponse mapea la entidad de dominio al contrato de salida.
 func toResponse(doc domain.Document) documentResponse {
 	return documentResponse{
 		ID:            doc.ID,
@@ -56,14 +52,12 @@ func toResponse(doc domain.Document) documentResponse {
 	}
 }
 
-// writeJSON serializa data con el status dado.
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-// createDocumentHandler maneja POST /documents.
 func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var createReq createDocumentRequest
@@ -87,8 +81,6 @@ func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 				respondErrorWithDocument(w, code, message, status, &existing)
 				return
 			}
-			// Almacén caído -> 503 DEPENDENCY_UNAVAILABLE; fallo inesperado ->
-			// 500 INTERNAL_ERROR. La traducción es por catálogo.
 			status, code, message := translateError(err)
 			respondError(w, code, message, status)
 			return
@@ -98,8 +90,7 @@ func createDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 	}
 }
 
-// listDocumentsHandler maneja GET /documents.
-// Devuelve la lista completa; sin paginación en la v1.
+// Sin paginación en la v1.
 func listDocumentsHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		docs, err := svc.List(r.Context())
@@ -121,7 +112,6 @@ func listDocumentsHandler(svc *service.DocumentService) http.HandlerFunc {
 	}
 }
 
-// getDocumentByIDHandler maneja GET /documents/{id}.
 // Valida el formato del ID de forma fail-fast antes de tocar el servicio.
 func getDocumentByIDHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +162,6 @@ func deleteDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 	}
 }
 
-// patchDocumentHandler maneja PATCH /documents/{id}: solo filename es mutable.
 func patchDocumentHandler(svc *service.DocumentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := extractValidObjectID(w, r)

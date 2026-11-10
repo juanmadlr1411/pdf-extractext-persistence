@@ -23,7 +23,6 @@ const (
 	persistenceDomain = "pdf-extractext.localhost"
 )
 
-// RegistrationInput reúne los datos con los que se construye el payload de Consul.
 type RegistrationInput struct {
 	ServiceID     string
 	ServiceName   string
@@ -35,7 +34,6 @@ type RegistrationInput struct {
 	Commit        string
 }
 
-// Registrar abstrae las operaciones de Consul que usa el ciclo de vida.
 type Registrar interface {
 	Register(context.Context, ServiceRegistration) error
 	Deregister(context.Context, string) error

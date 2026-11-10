@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// probeURL arma la URL de readiness con APP_PORT, igual que el servicio (config.Load).
 func probeURL() string {
 	port := os.Getenv("APP_PORT")
 	if port == "" {

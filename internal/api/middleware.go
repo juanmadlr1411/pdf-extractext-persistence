@@ -9,26 +9,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// HeaderXRequestID es el header HTTP usado para correlacionar peticiones
-// entre servicios (trazabilidad distribuida).
 const HeaderXRequestID = "X-Request-ID"
 
-// requestIDContextKey es el tipo de la clave de contexto del request ID.
 // Un tipo no exportado evita colisiones con claves de otros paquetes.
 type requestIDContextKey struct{}
 
-// RequestIDFromContext devuelve el ID de correlación de la petición
-// almacenado en el contexto, o "" si no existe. Permite que handlers y
-// capas inferiores lo usen como atributo estructurado en logs de slog.
 func RequestIDFromContext(ctx context.Context) string {
 	id, _ := ctx.Value(requestIDContextKey{}).(string)
 	return id
 }
 
-// requestIDMiddleware implementa la correlación de peticiones:
-// propaga el header X-Request-ID entrante o genera un UUID v4 si llega
-// vacío, lo añade al header de la respuesta ANTES de ejecutar el siguiente
-// handler y lo inyecta en el contexto de la petición.
 func requestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := r.Header.Get(HeaderXRequestID)
@@ -49,9 +39,6 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// panicRecoveryMiddleware intercepta cualquier pánico en los handlers,
-// evita que la aplicación crashee y responde con el envelope contractual
-// INTERNAL_ERROR (500) sin filtrar información interna al cliente.
 // El detalle del pánico solo se registra en el log del servidor.
 func panicRecoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

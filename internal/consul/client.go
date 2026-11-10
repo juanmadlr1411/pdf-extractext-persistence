@@ -21,7 +21,6 @@ const (
 	PersistenceConfigPrefix = "pdf-extractext/config/persistence/"
 )
 
-// ServiceRegistration representa el payload de registro de un servicio.
 type ServiceRegistration struct {
 	ID      string            `json:"ID"`
 	Name    string            `json:"Name"`
@@ -32,7 +31,6 @@ type ServiceRegistration struct {
 	Check   HealthCheck       `json:"Check"`
 }
 
-// HealthCheck describe el chequeo HTTP que Consul ejecuta contra el servicio.
 type HealthCheck struct {
 	HTTP                           string `json:"HTTP"`
 	Interval                       string `json:"Interval"`
@@ -40,20 +38,17 @@ type HealthCheck struct {
 	DeregisterCriticalServiceAfter string `json:"DeregisterCriticalServiceAfter"`
 }
 
-// KVEntry representa una clave del KV de Consul con su valor ya decodificado.
 type KVEntry struct {
 	Key   string `json:"Key"`
 	Value string `json:"Value"`
 }
 
-// Client es un cliente HTTP sin SDK para la API de Consul.
 type Client struct {
 	baseURL    string
 	token      string
 	httpClient *http.Client
 }
 
-// NewClient construye un cliente apuntando a Consul y aplica timeout a cada request.
 func NewClient(addr, token string) *Client {
 	return &Client{
 		baseURL:    normalizeBaseURL(addr),
@@ -62,7 +57,6 @@ func NewClient(addr, token string) *Client {
 	}
 }
 
-// Register registra el servicio en el agente local de Consul.
 func (c *Client) Register(ctx context.Context, reg ServiceRegistration) error {
 	payload, err := json.Marshal(reg)
 	if err != nil {
@@ -76,7 +70,7 @@ func (c *Client) Register(ctx context.Context, reg ServiceRegistration) error {
 	return ensureOK(resp, "register")
 }
 
-// Deregister elimina el servicio del catálogo; un 404 se considera éxito.
+// Un 404 se considera éxito.
 func (c *Client) Deregister(ctx context.Context, serviceID string) error {
 	resp, err := c.do(ctx, http.MethodPut, "/v1/agent/service/deregister/"+url.PathEscape(serviceID), nil)
 	if err != nil {
@@ -89,7 +83,6 @@ func (c *Client) Deregister(ctx context.Context, serviceID string) error {
 	return ensureOK(resp, "deregister")
 }
 
-// HealthPassing indica si Consul reporta al menos una instancia passing.
 func (c *Client) HealthPassing(ctx context.Context, serviceName string) (bool, error) {
 	resp, err := c.do(ctx, http.MethodGet, "/v1/health/service/"+url.PathEscape(serviceName)+"?passing=true", nil)
 	if err != nil {
@@ -108,7 +101,6 @@ func (c *Client) HealthPassing(ctx context.Context, serviceName string) (bool, e
 	return len(instances) > 0, nil
 }
 
-// KVList lista un prefijo recursivo y decodifica los valores base64 de Consul.
 func (c *Client) KVList(ctx context.Context, prefix string) ([]KVEntry, error) {
 	path := "/v1/kv/" + strings.TrimPrefix(prefix, "/")
 	resp, err := c.do(ctx, http.MethodGet, path+"?recurse", nil)

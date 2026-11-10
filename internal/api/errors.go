@@ -9,24 +9,21 @@ import (
 	"github.com/pdf-extractext/persistence/internal/service"
 )
 
-// Catálogo cerrado de códigos del contrato (RFC 9457, miembro de extensión).
 // Prohibido añadir códigos fuera de esta lista (YAGNI).
 const (
-	codeInvalidRequest        = "INVALID_REQUEST"        // 400
-	codeNotFound              = "NOT_FOUND"              // 404
-	codeDuplicateChecksum     = "DUPLICATE_CHECKSUM"     // 409
-	codeFilenameTooLong       = "FILENAME_TOO_LONG"      // 422
-	codeInternalError         = "INTERNAL_ERROR"         // 500
-	codeDependencyUnavailable = "DEPENDENCY_UNAVAILABLE" // 503
+	codeInvalidRequest        = "INVALID_REQUEST"
+	codeNotFound              = "NOT_FOUND"
+	codeDuplicateChecksum     = "DUPLICATE_CHECKSUM"
+	codeFilenameTooLong       = "FILENAME_TOO_LONG"
+	codeInternalError         = "INTERNAL_ERROR"
+	codeDependencyUnavailable = "DEPENDENCY_UNAVAILABLE"
 )
 
-// problemMetadata agrupa el URN y el title de cada code del catálogo.
 type problemMetadata struct {
 	urn   string
 	title string
 }
 
-// problemCatalog mapea cada code a su (URN, title) según RFC 9457 §3.
 var problemCatalog = map[string]problemMetadata{
 	codeInvalidRequest:        {"invalid-request", "Petición inválida"},
 	codeNotFound:              {"not-found", "Recurso no encontrado"},
@@ -36,9 +33,6 @@ var problemCatalog = map[string]problemMetadata{
 	codeDependencyUnavailable: {"dependency-unavailable", "Dependencia no disponible"},
 }
 
-// problemResponse es el detalle de error RFC 9457: application/problem+json
-// con type (URN), title, status, detail + los miembros de extensión code y
-// document (este último únicamente en el 409 DUPLICATE_CHECKSUM).
 type problemResponse struct {
 	Type     string            `json:"type"`
 	Title    string            `json:"title"`
@@ -48,13 +42,10 @@ type problemResponse struct {
 	Document *documentResponse `json:"document,omitempty"`
 }
 
-// respondError serializa el problema contractual con el status dado.
 func respondError(w http.ResponseWriter, code, detail string, status int) {
 	respondErrorWithDocument(w, code, detail, status, nil)
 }
 
-// respondErrorWithDocument serializa el problema adjuntando, si existe, el
-// documento que provoca el conflicto (409 DUPLICATE_CHECKSUM).
 func respondErrorWithDocument(w http.ResponseWriter, code, detail string, status int, doc *documentResponse) {
 	meta := problemCatalog[code]
 	problem := problemResponse{
@@ -70,11 +61,7 @@ func respondErrorWithDocument(w http.ResponseWriter, code, detail string, status
 	_ = json.NewEncoder(w).Encode(problem)
 }
 
-
-
-// translateError mapea errores de dominio/servicio a la dupla contractual
-// (status, code) más un mensaje seguro para el cliente. Cualquier error no
-// clasificado cae al fallback INTERNAL_ERROR (500) sin filtrar detalle interno.
+// Cualquier error no clasificado cae al fallback INTERNAL_ERROR (500) sin filtrar detalle interno.
 func translateError(err error) (status int, code string, message string) {
 	var dupErr *domain.DuplicateChecksumError
 	switch {

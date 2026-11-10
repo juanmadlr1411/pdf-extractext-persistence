@@ -2,8 +2,7 @@ package service
 
 import "context"
 
-// HealthChecker es el puerto para verificar la disponibilidad de dependencias
-// críticas (ej. MongoDB). La capa API solo conoce este contrato.
+// La capa API solo conoce este contrato (inversión de dependencias).
 type HealthChecker interface {
 	Check(ctx context.Context) error
 }
